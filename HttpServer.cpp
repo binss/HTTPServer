@@ -4,6 +4,9 @@
 #include <netinet/in.h>  /* sockaddr_in{} and other Internet defns */
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <stdio.h>
+#include <string.h>
+#include "RequestHandler.h"
 
 using namespace std;
 
@@ -15,25 +18,27 @@ void DealHttpRequest(int sockfd)
 {
     int ret;
     char buffer[1024*8] = {0};
-    ret = recv (sockfd, buffer, sizeof (buffer) -1, 0);
+    ret = recv(sockfd, buffer, sizeof(buffer) - 1, 0);
     if(ret > 0)
     {
-        char path[128] = {0};
+        RequestHandler request_handler;
 
-        char *line = strtok(buffer, "\n");
-        while(line != NULL)
-        {
-            if(strncmp(line, "GET ", 3) == 0)
-            {
-                printf("SERVER: GET request\n");
-                char *pos = strstr(line + 4, " ");
-                int len = pos - line - 4;
-                strncpy(path, line + 4, len);
-            }
-            printf("log: %s\n", line);
-            line = strtok(NULL, "\n");
-        }
+        request_handler.ParseRequest(buffer, strlen(buffer));
+        // char path[128] = {0};
 
+        // char *line = strtok(buffer, "\n");
+        // while(line != NULL)
+        // {
+        //     if(strncmp(line, "GET ", 3) == 0)
+        //     {
+        //         printf("SERVER: GET request\n");
+        //         char *pos = strstr(line + 4, " ");
+        //         int len = pos - line - 4;
+        //         strncpy(path, line + 4, len);
+        //     }
+        //     printf("log: %s\n", line);
+        //     line = strtok(NULL, "\n");
+        // }
         FILE * fp = fdopen(sockfd, "w");
         if( fp == NULL )
         {
@@ -42,7 +47,7 @@ void DealHttpRequest(int sockfd)
         else
         {
             // path和长度不一致时会变成下载?
-            fwrite(path, strlen(path), 1, fp);
+            fwrite(buffer, strlen(buffer), 1, fp);
         }
 
         fclose(fp);
