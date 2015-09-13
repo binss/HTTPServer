@@ -1,297 +1,103 @@
+/***********************************************************
+ * @FileName:      RequestHandler.cpp
+ * @Author:        binss
+ * @Create:        2015-09-13 20:59:10
+ * @Description:
+ * @History:
+    <author>    <time>    <version>    <desc>
+***********************************************************/
+
+
 #include "RequestHandler.h"
 #include <iostream>
-#include <string.h>
 #include <stdlib.h>
-#include <iostream>
-
-using namespace std;
-
-// 注意！由于匹配是从前向后执行最短匹配，所以"accept"要放到"accept-encoding"后，不然他们都会被"accept"匹配掉
-const char * FIELD_NAME_LIST[] = {"host", "connection", "content-length", "cache-control", "referer", "cookie", "user-agent",
-                                    "accept-encoding", "accept-language", "accept", "upgrade", "sec-websocket-key", "origin"};
-const int FIELD_NAME_LIST_LEN = 13;
+#include <boost/algorithm/string/regex.hpp>
 
 RequestHandler::RequestHandler()
 {
-    settings_.on_header_field = on_header_field;
-    settings_.on_header_value = on_header_value;
-    settings_.on_message_complete = on_message_complete;
-    settings_.on_url = on_url;
-
-    parser_.data = (void*)this;
-    // parser_ = malloc(sizeof(http_parser));
-    http_parser_init(&parser_, HTTP_REQUEST);
-    flag_ = -1;
-    http_header_.Reset();
 }
 
+template<class TO, class TI>
+inline TO ToType(const TI& input_obj)
+{
+    stringstream ss;
+    ss << input_obj;
 
+    TO output_obj;
+    ss >> output_obj;
+
+    return output_obj;
+}
 
 int RequestHandler::ParseRequest(char buf[], int len)
 {
     if( len <= 0 )
     {
+        cout<<"request error! lenght:"<<len<<endl;
         return -1;
     }
-    int nparsed = http_parser_execute(&parser_, &settings_, buf, len);
-    if (parser_.upgrade)
+    string str(buf);
+    vector<string> parts;
+    vector<string> lines;
+    boost::smatch token;
+    int data_line = 0;
+    // 先切出header和data
+    split_regex(parts, str, regex( "\r\n\r\n" ));
+    if(parts.size() != 2)
     {
-        /* handle new protocol */
+        cout<<"part decode error! lenght:"<<parts.size()<<" request:"<<str<<endl;
+        return -2;
     }
-    else if(nparsed != len)
+    // 解析header
+    split_regex(lines, parts[0], regex( "\r\n" ));
+    if(lines.size() <= 0)
     {
-        /* Handle error. Usually just close the connection. */
+        cout<<"header decode error!"<<endl;
+        return -3;
     }
-    // cout<<"method:"<<parser_.method<<endl;
-    return 0;
-}
-
-int RequestHandler::on_url( http_parser *parser, const char *at, size_t len )
-{
-    RequestHandler * handler = (RequestHandler*)parser->data;
-    handler->HandleUrl(at, len);
-    return 0;
-}
-
-
-int RequestHandler::HandleUrl( const char *at, size_t len )
-{
-    return 0;
-}
-
-int RequestHandler::on_message_complete( http_parser *parser )
-{
-    RequestHandler * handler = (RequestHandler*)parser->data;
-    handler->HandleComplete();
-    return 0;
-
-}
-
-int RequestHandler::HandleComplete()
-{
-    cout<<"--------Header---------"<<endl;
-    cout<<http_header_.domain_name<<endl;
-    cout<<http_header_.connection<<endl;
-    cout<<http_header_.cache_control<<endl;
-    cout<<http_header_.user_agent<<endl;
-    cout<<http_header_.accept<<endl;
-    cout<<http_header_.accept_encoding<<endl;
-    cout<<http_header_.accept_language<<endl;
-    cout<<http_header_.cookie<<endl;
-    cout<<"-----------------------"<<endl;
-    return 0;
-}
-int RequestHandler::on_header_field( http_parser *parser, const char *at, size_t len )
-{
-    RequestHandler * handler = (RequestHandler*)parser->data;
-    handler->HandleField(at, len);
-    return 0;
-}
-
-int RequestHandler::HandleField(const char *at, size_t len )
-{
-    if(!at)
+    // 对于第一行作特殊处理
     {
-        return -1;
+        vector<string> metas;
+        boost::split(metas, lines[0], boost::is_any_of(" "));
+        if(metas.size() != 3)
+        {
+            cout<<"header meta decode error!"<<endl;
+            return -2;
+        }
+        header_["method"] = metas[0];
+        header_["url"] = metas[1];
+        header_["protocol"] = metas[2];
+    }
+    for (size_t i = 1; i < lines.size(); ++ i)
+    {
+        // cout << lines[i] << endl;
+        regex reg("(.*): (.*)");
+        if ( boost::regex_search(lines[i], token, reg) )
+        {
+            // cout << token.size() << std::endl;
+            if( token.size() == 3 )
+            {
+                header_[token[1]] = token[2];
+            }
+            else
+            {
+                cout<<"header line decode error: "<<token[0]<<endl;
+            }
+        }
     }
 
-    // 如果键匹配，下一个读到的value就是对应的值
-    char temp[32] = {0};
-    for(int i = 0; i < (int)len && i < (int)sizeof(temp); i++)
+    if(header_["method"] == "POST" && header_.find("Content-Length") != header_.end())
     {
-        temp[i] = tolower(at[i]);
-    }
-
-    flag_ = -1;
-
-    for(int i=0; i < FIELD_NAME_LIST_LEN; i++)
-    {
-        // cout<<temp<<endl;
-        if(!memcmp(temp, FIELD_NAME_LIST[i], strlen(FIELD_NAME_LIST[i])))
+        if(parts[1].length() != ToType<int, string>(header_["Content-Length"]))
         {
-            flag_ = i;
-            break;
+            cout<<"warning: The length of data is not equal to the Content-Length!"<<endl;
         }
+        data_ = parts[1];
+        // cout<<"data: "<<data_<<endl;
     }
+
     return 0;
 }
 
-int RequestHandler::on_header_value( http_parser *parser, const char *at, size_t len )
-{
-    RequestHandler * handler = (RequestHandler*)parser->data;
-    handler->HandlerValue(at, len);
-    return 0;
-}
 
-int RequestHandler::HandlerValue(const char *at, size_t len )
-{
-    if(!at)
-    {
-        return -1;
-    }
-    // cout<<"flag:"<<flag_<<endl<<"len:"<<len<<endl<<"at:"<<at;
-
-    switch(flag_)
-    {
-        // host
-        case 0:
-        {
-            if(len > MAX_DOMAINNAME_LEN)
-            {
-                len = MAX_DOMAINNAME_LEN - 1;
-            }
-
-            memcpy(http_header_.domain_name, at, len);
-            http_header_.domain_name[len] = 0;
-            break;
-        }
-        // connection
-        case 1:
-        {
-            if (len >= MAX_CONNECTION_LEN)
-            {
-                len = MAX_CONNECTION_LEN - 1;
-            }
-
-            memcpy(http_header_.connection, at, len);
-            http_header_.connection[len] = 0;
-            break;
-        }
-        // content-length
-        case 2:
-        {
-            char char_len[6] = {0};
-            memcpy(char_len, at, len);
-            http_header_.content_len = atoi(char_len);
-            break;
-
-        }
-        // cache_control
-        case 3:
-        {
-            if (len >= MAX_CACHE_CONTROL_LEN)
-            {
-                len = MAX_CACHE_CONTROL_LEN - 1;
-            }
-            memcpy(http_header_.cache_control, at, len);
-            http_header_.cache_control[len] = 0;
-            break;
-        }
-        //referer
-        case 4:
-        {
-            if (len >= MAX_REFERER_LEN)
-            {
-                len = MAX_REFERER_LEN - 1;
-            }
-
-            memcpy(http_header_.referer, at, len);
-            http_header_.referer[len] = 0;
-            break;
-        }
-        // cookie
-        case 5:
-        {
-            if(len > MAX_COOKIE_LEN)
-            {
-                len = MAX_COOKIE_LEN-1;
-            }
-
-            memcpy(http_header_.cookie, at, len);
-            http_header_.cookie[len] = 0;
-            break;
-
-        }
-        // user_agent
-        case 6:
-        {
-            if(len > MAX_USER_AGENT_LEN)
-            {
-                len = MAX_USER_AGENT_LEN-1;
-            }
-
-            memcpy(http_header_.user_agent, at, len);
-            http_header_.user_agent[len] = 0;
-            break;
-
-        }
-        // accept_encoding
-        case 7:
-        {
-            if(len > MAX_ACCEPT_ENCODING_LEN)
-            {
-                len = MAX_ACCEPT_ENCODING_LEN-1;
-            }
-            memcpy(http_header_.accept_encoding, at, len);
-            http_header_.accept_encoding[len] = 0;
-            break;
-
-        }
-        // accept_language
-        case 8:
-        {
-            if(len > MAX_ACCEPT_LANGUAGE_LEN)
-            {
-                len = MAX_ACCEPT_LANGUAGE_LEN-1;
-            }
-
-            memcpy(http_header_.accept_language, at, len);
-            http_header_.accept_language[len] = 0;
-            break;
-        }
-        // accept
-        case 9:
-        {
-            if(len > MAX_ACCEPT_LEN)
-            {
-                len = MAX_ACCEPT_LEN-1;
-            }
-
-            memcpy(http_header_.accept, at, len);
-            http_header_.accept[len] = 0;
-            break;
-        }
-        // upgrade
-        case 10:
-        {
-            if (len >= MAX_UPGRADE_LEN)
-            {
-                len = MAX_UPGRADE_LEN - 1;
-            }
-
-            memcpy(http_header_.upgrade, at, len);
-            http_header_.upgrade[len] = 0;
-            break;
-        }
-        // sec-websocket-key
-        case 11:
-        {
-            if (len >= MAX_SECWEBSOCKETKEY_LEN)
-            {
-                len = MAX_SECWEBSOCKETKEY_LEN - 1;
-            }
-
-            memcpy(http_header_.sec_websocket_key, at, len);
-            http_header_.sec_websocket_key[len] = 0;
-            break;
-        }
-        // origin
-        case 12:
-        {
-            if (len >= MAX_DOMAINNAME_LEN)
-            {
-                len = MAX_DOMAINNAME_LEN - 1;
-            }
-            memcpy(http_header_.origin, at, len);
-            http_header_.origin[len] = 0;
-            break;
-        }
-        default:
-        {
-            // cout<<"The Field is undefined. Value Ignored."<<endl;
-            break;
-        }
-    }
-    return 0;
-}
 

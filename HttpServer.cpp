@@ -6,6 +6,8 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <string.h>
+#include <unordered_map>
+
 #include "RequestHandler.h"
 
 using namespace std;
@@ -14,7 +16,8 @@ using namespace std;
 #define LISTENQ 1024    /* 2nd argument to listen() */
 
 
-void DealHttpRequest(int sockfd)
+
+void HandleHttpRequest(int sockfd)
 {
     int ret;
     char buffer[1024*8] = {0};
@@ -24,21 +27,8 @@ void DealHttpRequest(int sockfd)
         RequestHandler request_handler;
 
         request_handler.ParseRequest(buffer, strlen(buffer));
-        // char path[128] = {0};
-
-        // char *line = strtok(buffer, "\n");
-        // while(line != NULL)
-        // {
-        //     if(strncmp(line, "GET ", 3) == 0)
-        //     {
-        //         printf("SERVER: GET request\n");
-        //         char *pos = strstr(line + 4, " ");
-        //         int len = pos - line - 4;
-        //         strncpy(path, line + 4, len);
-        //     }
-        //     printf("log: %s\n", line);
-        //     line = strtok(NULL, "\n");
-        // }
+        unordered_map<string, string> header = request_handler.GetHttpHeader();
+        // cout<< header["Cookie"]<<endl;
         FILE * fp = fdopen(sockfd, "w");
         if( fp == NULL )
         {
@@ -49,12 +39,11 @@ void DealHttpRequest(int sockfd)
             // path和长度不一致时会变成下载?
             fwrite(buffer, strlen(buffer), 1, fp);
         }
-
         fclose(fp);
     }
 }
 
-int main()
+int Select()
 {
     int i, maxi, maxfd, listenfd, connfd, sockfd;
     int nready, client[FD_SETSIZE];
@@ -103,10 +92,13 @@ int main()
             printf("new client: %s, port %d\n", dest, ntohs(cliaddr.sin_port));
             // 寻找client数组第一个空位并设置为该客户的套接字描述符
             for (i = 0; i < FD_SETSIZE; i++)
-                if (client[i] < 0) {
+            {
+                if (client[i] < 0)
+                {
                     client[i] = connfd; /* save descriptor */
                     break;
                 }
+            }
             // 如果client数组已满，报错
             if (i == FD_SETSIZE)
                 cout<<"too many clients"<<endl;
@@ -131,11 +123,17 @@ int main()
             // 如果该描述符就绪，读取并回显写入
             if (FD_ISSET(sockfd, &rset))
             {
-                DealHttpRequest(sockfd);
+                HandleHttpRequest(sockfd);
 
                 if (--nready <= 0)
                     break;              /* no more readable descriptors */
             }
         }
     }
+}
+
+int main()
+{
+    Select();
+    return 0;
 }

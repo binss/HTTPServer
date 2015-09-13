@@ -1,5 +1,5 @@
 CC      = g++
-CFLAGS  = -Wall -g
+CFLAGS  = -Wall -g -lboost_regex
 INCLUDEFLAGS =
 LDFLAGS =
 OBJS := $(patsubst %.c,%.o,$(wildcard *.c))
