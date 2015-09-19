@@ -40,7 +40,6 @@ int RequestHandler::ParseRequest(char buf[], int len)
     vector<string> parts;
     vector<string> lines;
     boost::smatch token;
-    int data_line = 0;
     // 先切出header和data
     split_regex(parts, str, regex( "\r\n\r\n" ));
     if(parts.size() != 2)
@@ -88,7 +87,7 @@ int RequestHandler::ParseRequest(char buf[], int len)
 
     if(header_["method"] == "POST" && header_.find("Content-Length") != header_.end())
     {
-        if(parts[1].length() != ToType<int, string>(header_["Content-Length"]))
+        if(parts[1].length() != ToType<unsigned int, string>(header_["Content-Length"]))
         {
             cout<<"warning: The length of data is not equal to the Content-Length!"<<endl;
         }

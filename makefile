@@ -1,5 +1,5 @@
 CC      = g++
-CFLAGS  = -Wall -g -lboost_regex
+CFLAGS  = -Wall -g -lboost_regex -std=c++11
 INCLUDEFLAGS =
 LDFLAGS =
 OBJS := $(patsubst %.c,%.o,$(wildcard *.c))
@@ -11,7 +11,7 @@ all : $(TARGETS)
 
 HttpServer:HttpServer.o $(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS)
-	# rm -f *.o *.d
+	rm -f *.d *.d.*
 
 %.o:%.c
 	$(CC) -o $@ -c $< $(CFLAGS) $(INCLUDEFLAGS)
@@ -28,7 +28,7 @@ HttpServer:HttpServer.o $(OBJS)
 
 .PHONY:clean
 clean:
-	rm -f $(TARGETS) *.o *.d *.d.*
+	rm -f $(TARGETS) *.o
 # all:
 # 	g++ -o HttpServer.o -c HttpServer.cpp -Wall -g
 # 	g++ -o http_parser.o -c http_parser.c -Wall -g
