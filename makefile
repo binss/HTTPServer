@@ -20,7 +20,7 @@ HttpServer:HttpServer.o $(OBJS)
 	$(CC) -o $@ -c $< $(CFLAGS) $(INCLUDEFLAGS)
 
 %.d:%.cpp
-	@set -e; rm -f $@; $(CC) -MM $< $(INCLUDEFLAGS) > $@.$$$$; \
+	@set -e; rm -f $@; $(CC) -MM $(CFLAGS) $< $(INCLUDEFLAGS) > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 

@@ -1,7 +1,9 @@
 #include <iostream>
+#include <sys/types.h>
 #include <sys/socket.h>  /* basic socket definitions */
 #include <sys/time.h>    /* timeval{} for select() */
 #include <netinet/in.h>  /* sockaddr_in{} and other Internet defns */
+#include <netinet/tcp.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -9,6 +11,8 @@
 #include <unordered_map>
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
+#include <signal.h>
+
 #include "RequestHandler.h"
 
 using namespace std;
@@ -18,32 +22,68 @@ using namespace std;
 #define EPOLL_SIZE 1024
 #define EPOLL_TIMEOUT 500
 
+int listenfd, epfd;
 
-
-void HandleHttpRequest(int sockfd)
+int HandleHttpRequest(int epfd, int sockfd)
 {
     int ret;
-    char buffer[1024*8] = {0};
-    ret = recv(sockfd, buffer, sizeof(buffer) - 1, 0);
-    if(ret > 0)
+    int len;
+    errno = 0;
+    while(true)
     {
-        RequestHandler request_handler;
-
-        request_handler.ParseRequest(buffer, strlen(buffer));
-        unordered_map<string, string> header = request_handler.GetHttpHeader();
-        // cout<< header["Cookie"]<<endl;
-        FILE * fp = fdopen(sockfd, "w");
-        if( fp == NULL )
+        char buffer[1024*8] = {0};
+        len = recv(sockfd, buffer, sizeof(buffer) - 1, 0);
+        if(len > 0)
         {
-            cout <<"bad fp"<<endl;
+            printf("[HandleHttpRequest]: len: %d errno: %d, fd: %d\n", len, errno, sockfd);
         }
-        else
+        else if(len < 0)
         {
-            // path和长度不一致时会变成下载?
-            fwrite(buffer, strlen(buffer), 1, fp);
+            // 数据读取完毕
+            break;
+            // -1 ERRNO 11 代表socket 未可读
         }
-        fclose(fp);
+        else if(len == 0)
+        {
+            // 如果收到0，代表客户端主动断开
+            close(sockfd);
+            return 0;
+        }
     }
+
+    struct epoll_event event;
+    event.data.fd = sockfd;
+    event.events = EPOLLOUT | EPOLLERR | EPOLLET;
+    ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
+    if(ret != 0)
+    {
+        printf("[HandleHttpRequest]epoll_ctl error\n");
+    }
+
+    // RequestHandler request_handler;
+    // request_handler.ParseRequest(buffer, strlen(buffer));
+    // unordered_map<string, string> header = request_handler.GetHttpHeader();
+    // cout<< header["Cookie"]<<endl;
+    return 0;
+}
+
+int HandleHttpResponse(int epfd, int sockfd)
+{
+    errno = 0;
+    char *buffer = "HTTP/1.0 200 OK\r\n\r\nOK\r\n";
+    int len = send(sockfd, buffer, strlen(buffer), 0);
+    printf("[HandleHttpResponse]: len: %d errno: %d, fd: %d\n", len, errno, sockfd);
+
+    // struct epoll_event event;
+    // event.data.fd = sockfd;
+    // event.events = EPOLLIN | EPOLLERR;
+    // int ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
+    // if(ret != 0)
+    // {
+    //     printf("[HandleHttpResponse]epoll_ctl error, ret: %d, errno: %d\n", ret, errno);
+    // }
+    close(sockfd);
+    return 0;
 }
 
 int SetNonblocking(int fd)
@@ -63,15 +103,78 @@ int SetNonblocking(int fd)
 #endif
 }
 
-int Epoll()
+
+int HandleNewRequest(int listenfd)
 {
-    int listenfd, connfd, epfd, event_count;
-    struct sockaddr_in cliaddr, servaddr;
+    while(true)
+    {
+        struct sockaddr_in cliaddr;
+        socklen_t clilen = sizeof(cliaddr);
+        int connfd = accept(listenfd, (sockaddr *) &cliaddr, &clilen);
+        if(connfd == -1)
+        {
+            if ( (errno == EAGAIN) || (errno == EWOULDBLOCK) )
+            {
+                // 已处理完此次ET的所有请求
+                break;
+            }
+            else
+            {
+                printf("accept error, errno: %d\n", errno);
+                break;
+                }
+            break;
+        }
+        SetNonblocking(connfd);
+
+        int on = 1;
+        // 停用Nagle算法
+        setsockopt(connfd, SOL_TCP, TCP_CORK, &on, sizeof(on));
+
+        char dest[30];
+        inet_ntop(AF_INET, &cliaddr.sin_addr, dest, 30);
+        printf("[new]socket: %s, port %d, fd: %d\n", dest, ntohs(cliaddr.sin_port), connfd);
+
+        // 接受连接
+        struct epoll_event event;
+        event.data.fd = connfd;
+        event.events = EPOLLIN | EPOLLET;
+        // 把新连接的描述符也加入epoll
+        int iRet = epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &event);
+        if ( iRet == -1 )
+        {
+            printf("epoll_ctl error\n");
+            break;
+        }
+    }
+    return 0;
+
+}
+
+void sighandler ( int sig )
+{
+    close(listenfd);
+    printf("closed\n");
+    exit(0);
+}
+
+int main()
+{
+    signal ( SIGABRT, &sighandler );
+    signal ( SIGTERM, &sighandler );
+    signal ( SIGINT, &sighandler );
+
+
+    int event_count;
+    struct sockaddr_in servaddr;
     struct epoll_event event, events[EPOLL_SIZE];
-    socklen_t clilen;
     // 初始化监听socket
     listenfd = socket(AF_INET, SOCK_STREAM, 0);
     SetNonblocking(listenfd);
+
+    // 重用端口
+    int on = 1;
+    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
     bzero(&servaddr, sizeof(servaddr));
     servaddr.sin_family      = AF_INET;
@@ -103,128 +206,41 @@ int Epoll()
     {
         // 如有描述符就绪
         event_count = epoll_wait(epfd, events, EPOLL_SIZE, EPOLL_TIMEOUT);
+
         for(int i = 0; i < event_count; i++)
         {
+            // 出错
+            if ( (events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP) )
+            {
+                printf("epoll error\n");
+                close(events[i].data.fd);
+                continue;
+            }
+
             // 如果就绪的是监听描述符
             if(events[i].data.fd == listenfd)
             {
-                clilen = sizeof(cliaddr);
-                connfd = accept(listenfd, (sockaddr *) &cliaddr, &clilen);
-                SetNonblocking(connfd);
-
-                char dest[30];
-                inet_ntop(AF_INET, &cliaddr.sin_addr, dest, 30);
-                printf("new client: %s, port %d\n", dest, ntohs(cliaddr.sin_port));
-                // 接受连接
-                event.data.fd = connfd;
-                // 把新连接的描述符也加入epoll
-                epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &event);
+                HandleNewRequest(listenfd);
                 // clients_list.push_back(connfd); // 添加新的客户端到list
-                cout<<"new connfd:"<<connfd<<endl;
-                HandleHttpRequest(connfd);
-
             }
             else
             {
+                printf("[wake]socket: fd: %d event: %d\n", events[i].data.fd, events[i].events);
                 // 如果是和client连接的描述符
-                HandleHttpRequest(events[i].data.fd);
-            }
-        }
-    }
-}
-
-int Select()
-{
-    int i, maxi, maxfd, listenfd, connfd, sockfd;
-    int nready, client[FD_SETSIZE];
-    fd_set rset, allset;
-    socklen_t clilen;
-    struct sockaddr_in  cliaddr, servaddr;
-
-    listenfd = socket(AF_INET, SOCK_STREAM, 0);
-
-    bzero(&servaddr, sizeof(servaddr));
-    servaddr.sin_family      = AF_INET;
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port        = htons(SERV_PORT);
-
-    bind(listenfd, (sockaddr *) &servaddr, sizeof(servaddr));
-
-    if(listen(listenfd, LISTENQ))
-    {
-        cout<<"error"<<endl;
-        return 0;
-    }
-    cout<<"listening: "<<INADDR_ANY<<":"<<SERV_PORT<<endl;
-
-    maxfd = listenfd;           /* initialize */
-    maxi = -1;                  /* index into client[] array */
-    // 初始化客户数组的值为-1代表空
-    for (i = 0; i < FD_SETSIZE; i++)
-        client[i] = -1;         /* -1 indicates available entry */
-    FD_ZERO(&allset);
-    // 把监听描述符加入读取集
-    FD_SET(listenfd, &allset);
-
-
-    for ( ; ; )
-    {
-        rset = allset;      /* structure assignment */
-        nready = select(maxfd+1, &rset, NULL, NULL, NULL);
-        // 如果有套接字可读
-        // 如果是监听套接字可读，代表有新客户连接
-        if (FD_ISSET(listenfd, &rset))
-        {    /* new client connection */
-            clilen = sizeof(cliaddr);
-            connfd = accept(listenfd, (sockaddr *) &cliaddr, &clilen);
-            char dest[30];
-            inet_ntop(AF_INET, &cliaddr.sin_addr, dest, 30);
-            printf("new client: %s, port %d\n", dest, ntohs(cliaddr.sin_port));
-            // 寻找client数组第一个空位并设置为该客户的套接字描述符
-            for (i = 0; i < FD_SETSIZE; i++)
-            {
-                if (client[i] < 0)
+                if(events[i].events & EPOLLIN)
                 {
-                    client[i] = connfd; /* save descriptor */
-                    break;
+                    HandleHttpRequest(epfd, events[i].data.fd);
+                }
+                else if(events[i].events & EPOLLOUT)
+                {
+                    HandleHttpResponse(epfd, events[i].data.fd);
+                }
+                else if(events[i].events & EPOLLERR)
+                {
+                    printf("error\n");
                 }
             }
-            // 如果client数组已满，报错
-            if (i == FD_SETSIZE)
-                cout<<"too many clients"<<endl;
-            // 把该客户的套接字加入读取集
-            FD_SET(connfd, &allset);    /* add new descriptor to set */
-            // 设置检查的套接字数目（+1）
-            if (connfd > maxfd)
-                maxfd = connfd;         /* for select */
-            // 设置client中最大的描述符序号
-            if (i > maxi)
-                maxi = i;               /* max index in client[] array */
-            // 如果没有其他描述符就绪，返回（等待下一次select返回
-            if (--nready <= 0)
-                continue;               /* no more readable descriptors */
-        }
-        // 遍历client数组（前maxi个）
-        for (i = 0; i <= maxi; i++)
-        {   /* check all clients for data */
-            // 空（-1），继续
-            if ( (sockfd = client[i]) < 0)
-                continue;
-            // 如果该描述符就绪，读取并回显写入
-            if (FD_ISSET(sockfd, &rset))
-            {
-                HandleHttpRequest(sockfd);
-
-                if (--nready <= 0)
-                    break;              /* no more readable descriptors */
-            }
         }
     }
-}
-
-int main()
-{
-    // Select();
-    Epoll();
     return 0;
 }
