@@ -40,6 +40,7 @@ int HandleHttpRequest(int epfd, int sockfd)
         else if(len < 0)
         {
             // 数据读取完毕
+            printf("errno: %d", errno);
             break;
             // -1 ERRNO 11 代表socket 未可读
         }
@@ -181,15 +182,21 @@ int main()
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     servaddr.sin_port        = htons(SERV_PORT);
     // 绑定监听描述符
-    bind(listenfd, (sockaddr *) &servaddr, sizeof(servaddr));
+    int ret = bind(listenfd, (sockaddr *) &servaddr, sizeof(servaddr));
+    if(ret == -1)
+    {
+        printf("[server]bind error ret: %d\n", errno);
 
+    }
     // 开始监听
     if(listen(listenfd, LISTENQ))
     {
-        cout<<"listen error"<<endl;
+        printf("listen error\n");
         return 0;
     }
-    cout<<"listening: "<<INADDR_ANY<<":"<<SERV_PORT<<endl;
+
+    printf("[server]listening: %d:%d\n", INADDR_ANY, SERV_PORT);
+    // cout<<" "<<INADDR_ANY<<":"<<SERV_PORT<<endl;
 
     // 创建epoll
     epfd = epoll_create(EPOLL_SIZE);
