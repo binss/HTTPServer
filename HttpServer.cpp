@@ -14,6 +14,7 @@
 #include <signal.h>
 
 #include "RequestHandler.h"
+#include "ResponseHandler.h"
 
 using namespace std;
 
@@ -40,7 +41,6 @@ int HandleHttpRequest(int epfd, int sockfd)
         else if(len < 0)
         {
             // 数据读取完毕
-            printf("errno: %d", errno);
             break;
             // -1 ERRNO 11 代表socket 未可读
         }
@@ -71,8 +71,15 @@ int HandleHttpRequest(int epfd, int sockfd)
 int HandleHttpResponse(int epfd, int sockfd)
 {
     errno = 0;
-    char *buffer = "HTTP/1.0 200 OK\r\n\r\nOK\r\n";
-    int len = send(sockfd, buffer, strlen(buffer), 0);
+    // char *buffer = "HTTP/1.0 200 OK\r\n\r\nOK\r\n";
+    // int len = send(sockfd, buffer, strlen(buffer), 0);
+    unordered_map<string, string> request_header;
+    ResponseHandler response_handler;
+    response_handler.InitResponse(request_header);
+    response_handler.BuildResponse();
+
+    string response = response_handler.GetResponse();
+    int len = send(sockfd, response.c_str(), response.length(), 0);
     printf("[HandleHttpResponse]: len: %d errno: %d, fd: %d\n", len, errno, sockfd);
 
     // struct epoll_event event;
