@@ -1,5 +1,5 @@
 /***********************************************************
- * @FileName:      RequestHandler.cpp
+ * @FileName:      Request.cpp
  * @Author:        binss
  * @Create:        2015-09-13 20:59:10
  * @Description:
@@ -8,12 +8,12 @@
 ***********************************************************/
 
 
-#include "RequestHandler.h"
+#include "Request.h"
 #include <iostream>
 #include <stdlib.h>
 #include <boost/algorithm/string/regex.hpp>
 
-RequestHandler::RequestHandler()
+Request::Request()
 {
 }
 
@@ -29,7 +29,7 @@ inline TO ToType(const TI& input_obj)
     return output_obj;
 }
 
-int RequestHandler::ParseRequest(char buf[], int len)
+int Request::Parse(char buf[], int len)
 {
     if( len <= 0 )
     {

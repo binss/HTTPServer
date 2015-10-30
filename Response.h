@@ -1,13 +1,13 @@
 /***********************************************************
-* FileName:      ResponseHandler.h
+* FileName:      Response.h
 * Author:        binss
 * Create:        2015-10-29 09:19:53
 * Description:   No Description
 ***********************************************************/
 
 
-#ifndef  __RESPONSE_HANDLER_HPP__
-#define  __RESPONSE_HANDLER_HPP__
+#ifndef  __RESPONSE_H__
+#define  __RESPONSE_H__
 
 #include <string>
 #include <vector>
@@ -16,17 +16,17 @@
 using namespace std;
 
 
-class ResponseHandler
+class Response
 {
 public:
-    ResponseHandler();
-    int InitResponse(unordered_map<string, string> &request_header);
+    Response();
+    int Init(unordered_map<string, string> &request_header);
     int GetTime(char * time, int length);
-    int BuildResponse();
-    string & GetResponse();
+    int Build();
+    string & GetStr();
     unordered_map<string, string> header_;
     string data_;
-    string response_;
+    string response_str_;
 };
 
 #endif

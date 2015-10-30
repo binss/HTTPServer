@@ -13,8 +13,8 @@
 #include <sys/ioctl.h>
 #include <signal.h>
 
-#include "RequestHandler.h"
-#include "ResponseHandler.h"
+#include "Request.h"
+#include "Response.h"
 
 using namespace std;
 
@@ -24,6 +24,38 @@ using namespace std;
 #define EPOLL_TIMEOUT 500
 
 int listenfd, epfd;
+
+class Connection
+{
+public:
+    Connection(int sockfd=0):fd(sockfd)
+    {
+    }
+    int BuildRequest(char *buf, int len)
+    {
+        return request_.Parse(buf, len);
+    }
+
+    int BuildResponse()
+    {
+        int ret = response_.Init(request_.GetHeader());
+        if( 0 == ret)
+        {
+            return response_.Build();
+        }
+        return ret;
+    }
+    string & GetResponse()
+    {
+        return response_.GetStr();
+    }
+public:
+    int fd;
+    Request request_;
+    Response response_;
+};
+
+unordered_map<int, Connection> connections;
 
 int HandleHttpRequest(int epfd, int sockfd)
 {
@@ -50,6 +82,9 @@ int HandleHttpRequest(int epfd, int sockfd)
             close(sockfd);
             return 0;
         }
+        Connection connection(sockfd);
+        connection.BuildRequest(buffer, strlen(buffer));
+        connections[sockfd] = connection;
     }
 
     struct epoll_event event;
@@ -60,26 +95,18 @@ int HandleHttpRequest(int epfd, int sockfd)
     {
         printf("[HandleHttpRequest]epoll_ctl error\n");
     }
-
-    // RequestHandler request_handler;
-    // request_handler.ParseRequest(buffer, strlen(buffer));
-    // unordered_map<string, string> header = request_handler.GetHttpHeader();
-    // cout<< header["Cookie"]<<endl;
     return 0;
 }
 
 int HandleHttpResponse(int epfd, int sockfd)
 {
     errno = 0;
-    // char *buffer = "HTTP/1.0 200 OK\r\n\r\nOK\r\n";
-    // int len = send(sockfd, buffer, strlen(buffer), 0);
-    unordered_map<string, string> request_header;
-    ResponseHandler response_handler;
-    response_handler.InitResponse(request_header);
-    response_handler.BuildResponse();
 
-    string response = response_handler.GetResponse();
-    int len = send(sockfd, response.c_str(), response.length(), 0);
+    Connection & connection = connections[sockfd];
+    connection.BuildResponse();
+    string & response_str = connection.GetResponse();
+
+    int len = send(sockfd, response_str.c_str(), response_str.length(), 0);
     printf("[HandleHttpResponse]: len: %d errno: %d, fd: %d\n", len, errno, sockfd);
 
     // struct epoll_event event;
@@ -166,6 +193,9 @@ void sighandler ( int sig )
     exit(0);
 }
 
+
+
+
 int main()
 {
     signal ( SIGABRT, &sighandler );
@@ -203,7 +233,6 @@ int main()
     }
 
     printf("[server]listening: %d:%d\n", INADDR_ANY, SERV_PORT);
-    // cout<<" "<<INADDR_ANY<<":"<<SERV_PORT<<endl;
 
     // 创建epoll
     epfd = epoll_create(EPOLL_SIZE);

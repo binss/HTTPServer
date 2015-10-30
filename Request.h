@@ -1,5 +1,5 @@
 /***********************************************************
- * @FileName:      RequestHandler.h
+ * @FileName:      Request.h
  * @Author:        binss
  * @Create:        2015-09-13 20:58:56
  * @Description:
@@ -7,8 +7,8 @@
     <author>    <time>    <version>    <desc>
 ***********************************************************/
 
-#ifndef  __REQUEST_HANDLER_HPP__
-#define  __REQUEST_HANDLER_HPP__
+#ifndef  __REQUEST_H__
+#define  __REQUEST_H__
 
 #include <string>
 #include <boost/algorithm/string.hpp>
@@ -20,12 +20,12 @@ using namespace std;
 using namespace boost;
 
 
-class RequestHandler
+class Request
 {
 public:
-    RequestHandler();
-    unordered_map<string, string> &GetHttpHeader(){ return header_; };
-    int ParseRequest(char *buf, int len);
+    Request();
+    unordered_map<string, string> &GetHeader(){ return header_; };
+    int Parse(char *buf, int len);
 
     unordered_map<string, string> header_;
     string data_;

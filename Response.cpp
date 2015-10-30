@@ -1,19 +1,19 @@
 /***********************************************************
-* FileName:      ResponseHandler.cpp
+* FileName:      Response.cpp
 * Author:        binss
 * Create:        2015-10-29 09:19:33
 * Description:   No Description
 ***********************************************************/
 
 #include <time.h>
-#include "ResponseHandler.h"
+#include "Response.h"
 
-ResponseHandler::ResponseHandler()
+Response::Response()
 {
 }
 
 
-int ResponseHandler::InitResponse(unordered_map<string, string> &request_header)
+int Response::Init(unordered_map<string, string> &request_header)
 {
     if(request_header["request_header"] == "keep-alive")
     {
@@ -30,11 +30,11 @@ int ResponseHandler::InitResponse(unordered_map<string, string> &request_header)
 
     }
 
-    response_ = "HTTP/1.0 200 OK\r\n";
+    response_str_ = "HTTP/1.0 200 OK\r\n";
     return 0;
 }
 
-int ResponseHandler::GetTime(char * time_buf, int length)
+int Response::GetTime(char * time_buf, int length)
 {
     if(time_buf == NULL)
     {
@@ -47,21 +47,21 @@ int ResponseHandler::GetTime(char * time_buf, int length)
     return 0;
 }
 
-int ResponseHandler::BuildResponse()
+int Response::Build()
 {
     for(unordered_map<string, string>::iterator iter = header_.begin(); iter != header_.end(); iter++)
     {
-        response_ += (*iter).first + ": " + (*iter).second + "\r\n";
+        response_str_ += (*iter).first + ": " + (*iter).second + "\r\n";
     }
-    printf("[response header]\n%s\n", response_.c_str());
-    response_ += "\r\n";
-    response_ += "OK\r\n";
+    printf("[response header]\n%s\n", response_str_.c_str());
+    response_str_ += "\r\n";
+    response_str_ += "OK\r\n";
     return 0;
 }
 
 // temp interface
-string & ResponseHandler::GetResponse()
+string & Response::GetStr()
 {
-    return response_;
+    return response_str_;
 }
 
