@@ -22,6 +22,7 @@ using namespace std;
 #define LISTENQ 1024    /* 2nd argument to listen() */
 #define EPOLL_SIZE 1024
 #define EPOLL_TIMEOUT 500
+#define BUFFER_SIZE    1024
 
 int listenfd, epfd;
 
@@ -30,10 +31,12 @@ class Connection
 public:
     Connection(int sockfd=0):fd(sockfd)
     {
+        recv_length = 0;
+        send_length = 0;
     }
-    int BuildRequest(char *buf, int len)
+    int BuildRequest()
     {
-        return request_.Parse(buf, len);
+        return request_.Parse(buffer, recv_length);
     }
 
     int BuildResponse()
@@ -51,6 +54,9 @@ public:
     }
 public:
     int fd;
+    char buffer[BUFFER_SIZE];
+    int recv_length;
+    int send_length;
     Request request_;
     Response response_;
 };
@@ -60,32 +66,43 @@ unordered_map<int, Connection> connections;
 int HandleHttpRequest(int epfd, int sockfd)
 {
     int ret;
-    int len;
+    int length;
     errno = 0;
+    unordered_map<int, Connection>::iterator search = connections.find(sockfd);
+    Connection *pConnection;
+    if(search != connections.end())
+    {
+        pConnection = &(search->second);
+    }
+    else
+    {
+        // 没找到，新建
+        pConnection = new Connection(sockfd);
+        connections[sockfd] = *pConnection;
+    }
+    char* pBuffer = pConnection->buffer;
     while(true)
     {
-        char buffer[1024*8] = {0};
-        len = recv(sockfd, buffer, sizeof(buffer) - 1, 0);
-        if(len > 0)
+        length = recv(sockfd, pBuffer + pConnection->recv_length, BUFFER_SIZE - pConnection->recv_length, 0);
+        if(length > 0)
         {
-            printf("[HandleHttpRequest]: len: %d errno: %d, fd: %d\n", len, errno, sockfd);
+            pConnection->recv_length += length;
         }
-        else if(len < 0)
+        else if(length < 0)
         {
             // 数据读取完毕
             break;
             // -1 ERRNO 11 代表socket 未可读
         }
-        else if(len == 0)
+        else if(length == 0)
         {
             // 如果收到0，代表客户端主动断开
             close(sockfd);
             return 0;
         }
-        Connection connection(sockfd);
-        connection.BuildRequest(buffer, strlen(buffer));
-        connections[sockfd] = connection;
     }
+    pConnection->BuildRequest();
+    printf("[HandleHttpRequest]: length: %d errno: %d, fd: %d\n", pConnection->recv_length, errno, sockfd);
 
     struct epoll_event event;
     event.data.fd = sockfd;
@@ -102,12 +119,32 @@ int HandleHttpResponse(int epfd, int sockfd)
 {
     errno = 0;
 
-    Connection & connection = connections[sockfd];
-    connection.BuildResponse();
-    string & response_str = connection.GetResponse();
-
-    int len = send(sockfd, response_str.c_str(), response_str.length(), 0);
-    printf("[HandleHttpResponse]: len: %d errno: %d, fd: %d\n", len, errno, sockfd);
+    Connection *pConnection = &connections[sockfd];
+    pConnection->BuildResponse();
+    string & response_str = pConnection->GetResponse();
+    while(true)
+    {
+        //检查有无已读取还未写入的
+        int remain_lenght = response_str.length() - pConnection->send_length;
+        const char * buffer = response_str.c_str();
+        if (remain_lenght > 0)
+        {
+            int lenght = send(sockfd, buffer + pConnection->send_length, remain_lenght, 0);
+            pConnection->send_length += lenght;
+            if(lenght != remain_lenght)
+            {
+                // 缓冲区已满，返回
+                return -1;
+            }
+        }
+        else
+        {
+            // 已经写完
+            break;
+        }
+    }
+    printf("[HandleHttpResponse]: length: %d errno: %d, fd: %d\n", pConnection->send_length, errno, sockfd);
+    close(sockfd);
 
     // struct epoll_event event;
     // event.data.fd = sockfd;
@@ -117,7 +154,6 @@ int HandleHttpResponse(int epfd, int sockfd)
     // {
     //     printf("[HandleHttpResponse]epoll_ctl error, ret: %d, errno: %d\n", ret, errno);
     // }
-    close(sockfd);
     return 0;
 }
 

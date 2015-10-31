@@ -6,6 +6,7 @@
 ***********************************************************/
 
 #include <time.h>
+#include <stdlib.h>
 #include "Response.h"
 
 Response::Response()
@@ -27,10 +28,11 @@ int Response::Init(unordered_map<string, string> &request_header)
     {
         header_["Date"] = string(time_buf);
         header_["Expires"] = string(time_buf);
-
+        header_["Expires"] = string(time_buf);
+        header_["Transfer-Encoding"] = "chunked";
     }
 
-    response_str_ = "HTTP/1.0 200 OK\r\n";
+    response_str_ = "HTTP/1.1 200 OK\r\n";
     return 0;
 }
 
@@ -55,7 +57,15 @@ int Response::Build()
     }
     printf("[response header]\n%s\n", response_str_.c_str());
     response_str_ += "\r\n";
-    response_str_ += "OK\r\n";
+
+    string content = "<a href=\"http://www.baidu.com\">hello</a>";
+    char content_length[20];
+    sprintf(content_length, "%lx\r\n", content.length());
+
+    response_str_ += string(content_length);
+    response_str_ += content + "\r\n";
+    response_str_ += "0\r\n\r\n";
+    printf("b:\n%s\n", response_str_.c_str());
     return 0;
 }
 

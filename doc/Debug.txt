@@ -1,0 +1,8 @@
+1. Chrome频繁访问导致socket卡死，Safari/wget无此异常
+原因：在访问时，epoll返回相应的socket(ET)，调用recv接收数据。但是因为Chrome在访问的时候会触发两次或以上的请求，导致socket被阻塞。
+解决：循环recv到返回－1且error为11为止，确保已经读完再作处理。
+
+2. 服务端关后重启无法接收到请求
+原因：服务端监听的端口未释放，导致绑定失败
+解决：设置监听socket为SO_REUSEADDR，复用端口
+
