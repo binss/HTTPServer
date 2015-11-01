@@ -26,6 +26,7 @@ public:
     Request();
     unordered_map<string, string> &GetHeader(){ return header_; };
     int Parse(char *buf, int len);
+    int Reset();
 
     unordered_map<string, string> header_;
     string data_;

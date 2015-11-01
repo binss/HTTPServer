@@ -22,7 +22,7 @@ using namespace std;
 #define LISTENQ 1024    /* 2nd argument to listen() */
 #define EPOLL_SIZE 1024
 #define EPOLL_TIMEOUT 500
-#define BUFFER_SIZE    1024
+#define BUFFER_SIZE 1024
 
 int listenfd, epfd;
 
@@ -37,6 +37,7 @@ public:
     int BuildRequest()
     {
         return request_.Parse(buffer, recv_length);
+        return 0;
     }
 
     int BuildResponse()
@@ -52,6 +53,14 @@ public:
     {
         return response_.GetStr();
     }
+    int Reset()
+    {
+        recv_length = 0;
+        send_length = 0;
+        memset(buffer, 0, sizeof(buffer));
+        request_.Reset();
+        response_.Reset();
+    }
 public:
     int fd;
     char buffer[BUFFER_SIZE];
@@ -61,24 +70,25 @@ public:
     Response response_;
 };
 
-unordered_map<int, Connection> connections;
+unordered_map<int, Connection *> connections;
 
 int HandleHttpRequest(int epfd, int sockfd)
 {
     int ret;
     int length;
     errno = 0;
-    unordered_map<int, Connection>::iterator search = connections.find(sockfd);
+    unordered_map<int, Connection *>::iterator search = connections.find(sockfd);
     Connection *pConnection;
     if(search != connections.end())
     {
-        pConnection = &(search->second);
+        pConnection = search->second;
+        pConnection->Reset();
     }
     else
     {
         // 没找到，新建
         pConnection = new Connection(sockfd);
-        connections[sockfd] = *pConnection;
+        connections[sockfd] = pConnection;
     }
     char* pBuffer = pConnection->buffer;
     while(true)
@@ -119,7 +129,7 @@ int HandleHttpResponse(int epfd, int sockfd)
 {
     errno = 0;
 
-    Connection *pConnection = &connections[sockfd];
+    Connection *pConnection = connections[sockfd];
     pConnection->BuildResponse();
     string & response_str = pConnection->GetResponse();
     while(true)
@@ -144,16 +154,16 @@ int HandleHttpResponse(int epfd, int sockfd)
         }
     }
     printf("[HandleHttpResponse]: length: %d errno: %d, fd: %d\n", pConnection->send_length, errno, sockfd);
-    close(sockfd);
+    // close(sockfd);
 
-    // struct epoll_event event;
-    // event.data.fd = sockfd;
-    // event.events = EPOLLIN | EPOLLERR;
-    // int ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
-    // if(ret != 0)
-    // {
-    //     printf("[HandleHttpResponse]epoll_ctl error, ret: %d, errno: %d\n", ret, errno);
-    // }
+    struct epoll_event event;
+    event.data.fd = sockfd;
+    event.events = EPOLLIN | EPOLLERR;
+    int ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
+    if(ret != 0)
+    {
+        printf("[HandleHttpResponse]epoll_ctl error, ret: %d, errno: %d\n", ret, errno);
+    }
     return 0;
 }
 

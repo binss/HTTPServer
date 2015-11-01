@@ -16,7 +16,7 @@ Response::Response()
 
 int Response::Init(unordered_map<string, string> &request_header)
 {
-    if(request_header["request_header"] == "keep-alive")
+    if(request_header["Connection"] == "keep-alive")
     {
         header_["Connection"] = "keep-alive";
     }
@@ -28,9 +28,15 @@ int Response::Init(unordered_map<string, string> &request_header)
     {
         header_["Date"] = string(time_buf);
         header_["Expires"] = string(time_buf);
-        header_["Expires"] = string(time_buf);
+    }
+
+    printf("[debug]%s %s %s\n", request_header["method"].c_str(), request_header["url"].c_str(), request_header["protocol"].c_str());
+
+    if(request_header["protocol"] == "HTTP/1.1")
+    {
         header_["Transfer-Encoding"] = "chunked";
     }
+
 
     response_str_ = "HTTP/1.1 200 OK\r\n";
     return 0;
@@ -55,7 +61,7 @@ int Response::Build()
     {
         response_str_ += (*iter).first + ": " + (*iter).second + "\r\n";
     }
-    printf("[response header]\n%s\n", response_str_.c_str());
+    // printf("[response header]\n%s\n", response_str_.c_str());
     response_str_ += "\r\n";
 
     string content = "<a href=\"http://www.baidu.com\">hello</a>";
@@ -65,7 +71,6 @@ int Response::Build()
     response_str_ += string(content_length);
     response_str_ += content + "\r\n";
     response_str_ += "0\r\n\r\n";
-    printf("b:\n%s\n", response_str_.c_str());
     return 0;
 }
 
@@ -75,3 +80,10 @@ string & Response::GetStr()
     return response_str_;
 }
 
+int Response::Reset()
+{
+    header_.clear();
+    data_.clear();
+    response_str_.clear();
+    return 0;
+}

@@ -24,9 +24,13 @@ public:
     int GetTime(char * time, int length);
     int Build();
     string & GetStr();
+    int Reset();
+
+
     unordered_map<string, string> header_;
     string data_;
     string response_str_;
+
 };
 
 #endif

@@ -36,6 +36,7 @@ int Request::Parse(char buf[], int len)
         cout<<"request error! lenght:"<<len<<endl;
         return -1;
     }
+    printf("buffer\n%s\n\n\n", buf);
     string str(buf);
     vector<string> parts;
     vector<string> lines;
@@ -44,7 +45,8 @@ int Request::Parse(char buf[], int len)
     split_regex(parts, str, regex( "\r\n\r\n" ));
     if(parts.size() != 2)
     {
-        cout<<"part decode error! lenght:"<<parts.size()<<" request:"<<str<<endl;
+        cout<<"part decode error! lenght:"<<parts.size()<<endl;
+        // cout<<"[a]"<<parts[0]<<endl<<"[b]"<<parts[1]<<endl<<"[c]"<<parts[2]<<endl<<"[end]"<<endl;
         return -2;
     }
     // 解析header
@@ -85,6 +87,7 @@ int Request::Parse(char buf[], int len)
         }
     }
 
+
     if(header_["method"] == "POST" && header_.find("Content-Length") != header_.end())
     {
         if(parts[1].length() != ToType<unsigned int, string>(header_["Content-Length"]))
@@ -98,5 +101,11 @@ int Request::Parse(char buf[], int len)
     return 0;
 }
 
+int Request::Reset()
+{
+    header_.clear();
+    data_.clear();
+    return 0;
+}
 
 
