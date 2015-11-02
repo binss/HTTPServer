@@ -25,11 +25,14 @@ public:
     int Build();
     string & GetStr();
     int Reset();
-
+    int LoadData(string uri);
 
     unordered_map<string, string> header_;
     string data_;
     string response_str_;
+    int type_;
+    string protocol_;
+    map<string, int> DATA_TYPES;
 
 };
 

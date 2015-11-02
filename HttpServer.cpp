@@ -60,6 +60,7 @@ public:
         memset(buffer, 0, sizeof(buffer));
         request_.Reset();
         response_.Reset();
+        return 0;
     }
 public:
     int fd;

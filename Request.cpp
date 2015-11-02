@@ -36,7 +36,7 @@ int Request::Parse(char buf[], int len)
         cout<<"request error! lenght:"<<len<<endl;
         return -1;
     }
-    printf("buffer\n%s\n\n\n", buf);
+    // printf("buffer\n%s\n\n\n", buf);
     string str(buf);
     vector<string> parts;
     vector<string> lines;
@@ -66,7 +66,7 @@ int Request::Parse(char buf[], int len)
             return -2;
         }
         header_["method"] = metas[0];
-        header_["url"] = metas[1];
+        header_["uri"] = metas[1];
         header_["protocol"] = metas[2];
     }
     for (size_t i = 1; i < lines.size(); ++ i)
