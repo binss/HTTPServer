@@ -22,7 +22,6 @@ using namespace std;
 #define LISTENQ 1024    /* 2nd argument to listen() */
 #define EPOLL_SIZE 1024
 #define EPOLL_TIMEOUT 500
-#define BUFFER_SIZE 1024
 
 int listenfd, epfd;
 
@@ -49,9 +48,17 @@ public:
         }
         return ret;
     }
-    string & GetResponse()
+    // string & GetResponse()
+    // {
+    //     return response_.GetStr();
+    // }
+    char * GetResponse()
     {
-        return response_.GetStr();
+        return response_.GetBuffer();
+    }
+    int GetResponseLength()
+    {
+        return response_.GetBufferLength();
     }
     int Reset()
     {
@@ -132,15 +139,16 @@ int HandleHttpResponse(int epfd, int sockfd)
 
     Connection *pConnection = connections[sockfd];
     pConnection->BuildResponse();
-    string & response_str = pConnection->GetResponse();
+    // string & response_str = pConnection->GetResponse();
+    char * response = pConnection->GetResponse();
     while(true)
     {
         //检查有无已读取还未写入的
-        int remain_lenght = response_str.length() - pConnection->send_length;
-        const char * buffer = response_str.c_str();
+        int remain_lenght = pConnection->GetResponseLength() - pConnection->send_length;
+        // const char * buffer = response_str.c_str();
         if (remain_lenght > 0)
         {
-            int lenght = send(sockfd, buffer + pConnection->send_length, remain_lenght, 0);
+            int lenght = send(sockfd, response + pConnection->send_length, remain_lenght, 0);
             pConnection->send_length += lenght;
             if(lenght != remain_lenght)
             {

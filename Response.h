@@ -12,9 +12,10 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-
 using namespace std;
 
+#define BUFFER_SIZE 1024 * 1024
+#define DATA_BUFFER_SIZE 1024 * 1000
 
 class Response
 {
@@ -26,9 +27,15 @@ public:
     string & GetStr();
     int Reset();
     int LoadData(string uri);
+    char * GetBuffer();
+    int GetBufferLength();
 
     unordered_map<string, string> header_;
-    string data_;
+    // string data_;
+    char buffer_[BUFFER_SIZE];
+    int buffer_length_;
+    char data_buffer_[DATA_BUFFER_SIZE];
+    int data_buffer_length_;
     string response_str_;
     int type_;
     string protocol_;
