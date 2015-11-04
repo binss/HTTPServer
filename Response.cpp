@@ -31,15 +31,19 @@ Response::Response()
     DATA_TYPES["jpg"] = 12;
     DATA_TYPES["gif"] = 13;
 
+    buffer_length_ = 0;
+    data_buffer_length_ = 0;
+    memset(buffer_, 0, sizeof(buffer_));
+    memset(data_buffer_, 0, sizeof(data_buffer_));
 }
 
 
 int Response::Init(unordered_map<string, string> &request_header)
 {
-    // if(request_header["Connection"] == "keep-alive")
-    // {
-    //     header_["Connection"] = "keep-alive";
-    // }
+    if(request_header["Connection"] == "keep-alive")
+    {
+        header_["Connection"] = "keep-alive";
+    }
     header_["Set-Cookie"] = "dudu";
     header_["Server"] = "Dudu Server/0.1";
     char time_buf[128];
@@ -49,36 +53,13 @@ int Response::Init(unordered_map<string, string> &request_header)
         header_["Date"] = string(time_buf);
         header_["Expires"] = string(time_buf);
     }
-    // if(request_header["protocol"] == "HTTP/1.1")
-    // {
-    //     header_["Transfer-Encoding"] = "chunked";
-    // }
+
     protocol_ = request_header["protocol"];
     if(request_header["uri"] != "")
     {
         LoadData(request_header["uri"]);
-        // if(uri == "/")
-        // {
-        //     uri = "/index.html";
-        // }
-        // string path = TEMPLATES_DIR + uri ;
-
-        // printf("[debug]file path:%s\n", path.c_str());
-
-        // FILE* template_file = fopen(path.c_str(), "r");
-        // if(template_file)
-        // {
-        //     char buffer[BUFFER_SIZE];
-        //     int length = fread(buffer, sizeof(buffer[0]), BUFFER_SIZE - 1, template_file);
-        //     if(length > 0)
-        //     {
-        //         data_ = string(buffer);
-        //     }
-        //     fclose(template_file);
-        // }
     }
 
-    // response_str_ = "HTTP/1.1 200 OK\r\n";
     return 0;
 }
 
@@ -206,26 +187,7 @@ int Response::GetTime(char * time_buf, int length)
 
 int Response::Build()
 {
-    // for(unordered_map<string, string>::iterator iter = header_.begin(); iter != header_.end(); iter++)
-    // {
-    //     response_str_ += (*iter).first + ": " + (*iter).second + "\r\n";
-    // }
-    // printf("[response header]\n%s\n", response_str_.c_str());
-    // response_str_ += "\r\n";
 
-    // if(data_.empty())
-    // {
-    //     data_ = "<a href=\"http://www.baidu.com\">hello</a>";
-    // }
-    // char content_length[20];
-    // sprintf(content_length, "%lx\r\n", data_.length());
-
-    // response_str_ += string(content_length);
-    // response_str_ += data_ + "\r\n";
-    // response_str_ += "0\r\n\r\n";
-
-    buffer_length_ = 0;
-    memset(buffer_, 0, sizeof(buffer_));
 
     string header_str = "HTTP/1.1 200 OK\r\n";
     for(unordered_map<string, string>::iterator iter = header_.begin(); iter != header_.end(); ++ iter)
@@ -233,27 +195,30 @@ int Response::Build()
         header_str += (*iter).first + ": " + (*iter).second + "\r\n";
     }
     header_str += "\r\n";
+
     memcpy(buffer_, header_str.c_str(), header_str.length());
     buffer_length_ += header_str.length();
+    if(type_ > 10 && type_ < 14)
+    {
+        printf("[debug]pic\n");
+        memcpy(buffer_ + buffer_length_, data_buffer_, data_buffer_length_);
+        buffer_length_ += data_buffer_length_;
+    }
+    else
+    {
+        char content_length[20];
+        sprintf(content_length, "%x\r\n", data_buffer_length_);
+        memcpy(buffer_ + buffer_length_, content_length, strlen(content_length));
+        buffer_length_ += strlen(content_length);
 
-    char content_length[20];
-    sprintf(content_length, "%x\r\n", data_buffer_length_);
-    memcpy(buffer_ + buffer_length_, content_length, strlen(content_length));
-    buffer_length_ += strlen(content_length);
+        memcpy(buffer_ + buffer_length_, data_buffer_, data_buffer_length_);
+        buffer_length_ += data_buffer_length_;
 
-    memcpy(buffer_ + buffer_length_, data_buffer_, data_buffer_length_);
-    buffer_length_ += data_buffer_length_;
-
-    char buffer_end[20] = "\r\n0\r\n\r\n";
-    memcpy(buffer_ + buffer_length_, buffer_end, strlen(buffer_end));
-    buffer_length_ += strlen(buffer_end);
+        char buffer_end[20] = "\r\n0\r\n\r\n";
+        memcpy(buffer_ + buffer_length_, buffer_end, strlen(buffer_end));
+        buffer_length_ += strlen(buffer_end);
+    }
     return 0;
-}
-
-// temp interface
-string & Response::GetStr()
-{
-    return response_str_;
 }
 
 char * Response::GetBuffer()
@@ -272,8 +237,8 @@ int Response::GetBufferLength()
 int Response::Reset()
 {
     header_.clear();
-    // data_.clear();
-    response_str_.clear();
+    buffer_length_ = 0;
+    data_buffer_length_ = 0;
     memset(buffer_, 0, sizeof(buffer_));
     memset(data_buffer_, 0, sizeof(data_buffer_));
     return 0;

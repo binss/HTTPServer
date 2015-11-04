@@ -31,7 +31,6 @@ public:
     int GetBufferLength();
 
     unordered_map<string, string> header_;
-    // string data_;
     char buffer_[BUFFER_SIZE];
     int buffer_length_;
     char data_buffer_[DATA_BUFFER_SIZE];

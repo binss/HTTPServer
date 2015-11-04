@@ -48,10 +48,6 @@ public:
         }
         return ret;
     }
-    // string & GetResponse()
-    // {
-    //     return response_.GetStr();
-    // }
     char * GetResponse()
     {
         return response_.GetBuffer();
