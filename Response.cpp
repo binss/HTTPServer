@@ -13,33 +13,29 @@
 #include <cstring>
 #include <sstream>
 
+#include "mapper.h"
 #include "Response.h"
 
+#define NORMAL_DATA_SIZE 1024 * 1024
+#define BIG_DATA_SIZE 1024 * 1024 * 10
+#define INFO_BUFFER_SIZE 1024
 
-const string TEMPLATES_DIR = "/home/binss/HTTPServer/templates";
-const string TEMPLATES_ERROR_DIR = "/home/binss/HTTPServer/templates/error";
-const string RESOURCES_DIR = "/home/binss/HTTPServer/resources";
 
 Response::Response()
 {
-    // 手动初始化，今后改成从文件等读入
-    DATA_TYPES[""] = 0;
-    DATA_TYPES[".js"] = 1;
-    DATA_TYPES["css"] = 2;
-
-    DATA_TYPES["png"] = 11;
-    DATA_TYPES["jpg"] = 12;
-    DATA_TYPES["gif"] = 13;
-
+    data_buffer_ = NULL;
+    buffer_ = NULL;
     buffer_length_ = 0;
     data_buffer_length_ = 0;
-    memset(buffer_, 0, sizeof(buffer_));
-    memset(data_buffer_, 0, sizeof(data_buffer_));
+    data_buffer_size_ = 0;
+    buffer_size_ = 0;
 }
 
 
 int Response::Init(unordered_map<string, string> &request_header)
 {
+    header_.clear();
+
     if(request_header["Connection"] == "keep-alive")
     {
         header_["Connection"] = "keep-alive";
@@ -79,96 +75,139 @@ inline TO ToType(const TI& input_obj)
 
 int Response::LoadData(string uri)
 {
+    string path;
+    string file_type;
+    FILE* template_file = NULL;
     if(uri != "")
     {
         if(uri.find("..") == string::npos)
         {
-            string path;
-            string file_type;
-            FILE* template_file = NULL;
+
             if(uri.length() > 4)
             {
                 file_type = uri.substr(uri.length() - 3);
-                type_ = DATA_TYPES[file_type];
+                type_ = Mapper::GetInstance()->GetContentType(file_type);
             }
             else
             {
-                type_ = 0;
+                type_ = 1;
             }
             printf("[debug]file type: %s[%d]\n", file_type.c_str(), type_);
+
+            path = Mapper::GetInstance()->GetURI(uri, type_);
+            template_file = fopen(path.c_str(), "r");
+
+            if( NULL == template_file)
+            {
+                type_ = 1;
+                path = Mapper::GetInstance()->GetURI("/404/", type_);
+            }
+
             switch(type_)
             {
                 case 1:
                 {
+                    header_["Content-Type"] = "text/html";
+                    break;
+                }
+                case 10:
+                {
                     header_["Content-Type"] = "text/javascript";
                     break;
                 }
-                case 2:
+                case 11:
                 {
                     header_["Content-Type"] = "text/css";
                     break;
                 }
-
-                case 11:
-                case 12:
-                case 13:
+                case 20:
+                case 21:
+                case 22:
                 {
                     header_["Content-Type"] = "image/" + file_type;
                     break;
                 }
                 default:
                 {
+                    printf("[error]can not recognize type: %s, set to default type\n", file_type.c_str());
                     header_["Content-Type"] = "text/html";
                 }
             }
-            if(type_ < 10)
-            {
-                if(uri == "/")
-                {
-                    uri = "/index.html";
-                    header_["Content-Type"] = "text/html";
-                }
-                path = TEMPLATES_DIR + uri;
-                template_file = fopen(path.c_str(), "r");
-            }
-            else if(type_ > 10)
-            {
-                path = RESOURCES_DIR + uri;
-                template_file = fopen(path.c_str(), "rb");
 
-            }
-            printf("[debug]file path:%s\n", path.c_str());
-            if(template_file)
-            {
-                int length = fread(data_buffer_, sizeof(data_buffer_[0]), DATA_BUFFER_SIZE - 1, template_file);
-                if(length > 0)
-                {
-                    data_buffer_length_ = length;
-                }
-                printf("[debug]data buffer len %d\n", data_buffer_length_);
-                fclose(template_file);
-            }
-
-            if(protocol_ == "HTTP/1.1" && type_ == 0)
-            {
-                header_["Transfer-Encoding"] = "chunked";
-            }
-            if(type_ > 10 && type_ < 14)
-            {
-                header_["Content-Length"] = ToType<string, int>(data_buffer_length_);
-                header_["Accept-Ranges"] = "bytes";
-            }
         }
         else
         {
             // 禁止.. 防止目录外文件被返回 直接返回403
-            // 403
+            type_ = 1;
+            path = Mapper::GetInstance()->GetURI("/403/", type_);
+
         }
     }
     else
     {
-        // 404
+        type_ = 1;
+        path = Mapper::GetInstance()->GetURI("/404/", type_);
     }
+    printf("[debug]uri:%s, path:%s\n", uri.c_str(), path.c_str());
+
+
+    if(type_ < 20)
+    {
+        if(data_buffer_ == NULL)
+        {
+            data_buffer_ = new char[NORMAL_DATA_SIZE];
+            buffer_ = new char[NORMAL_DATA_SIZE + INFO_BUFFER_SIZE];
+            data_buffer_size_ = NORMAL_DATA_SIZE;
+            buffer_size_ = NORMAL_DATA_SIZE + INFO_BUFFER_SIZE;
+        }
+    }
+    if(type_ >= 20)
+    {
+        header_["Content-Length"] = ToType<string, int>(data_buffer_length_);
+        header_["Accept-Ranges"] = "bytes";
+
+        if(data_buffer_ == NULL || data_buffer_size_ < BIG_DATA_SIZE)
+        {
+            delete []data_buffer_;
+            delete []buffer_;
+            data_buffer_ = new char[BIG_DATA_SIZE];
+            buffer_ = new char[BIG_DATA_SIZE + INFO_BUFFER_SIZE];
+            data_buffer_size_ = BIG_DATA_SIZE;
+            buffer_size_ = BIG_DATA_SIZE + INFO_BUFFER_SIZE;
+        }
+    }
+    printf("[debug]data_buffer_size_ %d buffer_size_ %d\n", data_buffer_size_, buffer_size_);
+    Reset();
+
+    if( NULL == template_file)
+    {
+        template_file = fopen(path.c_str(), "r");
+    }
+    if( NULL == template_file)
+    {
+        printf("[error]can not read: %s\n", path.c_str());
+        return -1;
+    }
+
+
+    int length = fread(data_buffer_, sizeof(data_buffer_[0]), data_buffer_size_ - 1, template_file);
+    if(length > 0)
+    {
+        data_buffer_length_ = length;
+    }
+    // printf("[debug]data buffer len %d\n", data_buffer_length_);
+    fclose(template_file);
+
+    if(protocol_ == "HTTP/1.1" && type_ < 10)
+    {
+        header_["Transfer-Encoding"] = "chunked";
+    }
+    if(type_ >= 10)
+    {
+        header_["Content-Length"] = ToType<string, int>(data_buffer_length_);
+        header_["Accept-Ranges"] = "bytes";
+    }
+
     return 0;
 }
 
@@ -187,8 +226,6 @@ int Response::GetTime(char * time_buf, int length)
 
 int Response::Build()
 {
-
-
     string header_str = "HTTP/1.1 200 OK\r\n";
     for(unordered_map<string, string>::iterator iter = header_.begin(); iter != header_.end(); ++ iter)
     {
@@ -198,9 +235,8 @@ int Response::Build()
 
     memcpy(buffer_, header_str.c_str(), header_str.length());
     buffer_length_ += header_str.length();
-    if(type_ > 10 && type_ < 14)
+    if(type_ >= 10)
     {
-        printf("[debug]pic\n");
         memcpy(buffer_ + buffer_length_, data_buffer_, data_buffer_length_);
         buffer_length_ += data_buffer_length_;
     }
@@ -228,18 +264,16 @@ char * Response::GetBuffer()
 
 int Response::GetBufferLength()
 {
-    printf("[debug]%d\n", buffer_length_);
+    // printf("[debug]%d\n", buffer_length_);
     return buffer_length_;
 }
 
 
-
 int Response::Reset()
 {
-    header_.clear();
     buffer_length_ = 0;
     data_buffer_length_ = 0;
-    memset(buffer_, 0, sizeof(buffer_));
-    memset(data_buffer_, 0, sizeof(data_buffer_));
+    memset(buffer_, 0, buffer_size_);
+    memset(data_buffer_, 0, data_buffer_size_);
     return 0;
 }

@@ -22,6 +22,7 @@ using namespace std;
 #define LISTENQ 1024    /* 2nd argument to listen() */
 #define EPOLL_SIZE 1024
 #define EPOLL_TIMEOUT 500
+#define BUFFER_SIZE 1024
 
 int listenfd, epfd;
 

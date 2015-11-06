@@ -14,9 +14,6 @@
 #include <unordered_map>
 using namespace std;
 
-#define BUFFER_SIZE 1024 * 1024
-#define DATA_BUFFER_SIZE 1024 * 1000
-
 class Response
 {
 public:
@@ -24,19 +21,20 @@ public:
     int Init(unordered_map<string, string> &request_header);
     int GetTime(char * time, int length);
     int Build();
-    string & GetStr();
     int Reset();
     int LoadData(string uri);
     char * GetBuffer();
     int GetBufferLength();
 
+private:
     unordered_map<string, string> header_;
-    char buffer_[BUFFER_SIZE];
+    char * buffer_;
     int buffer_length_;
-    char data_buffer_[DATA_BUFFER_SIZE];
+    char * data_buffer_;
     int data_buffer_length_;
-    string response_str_;
     int type_;
+    int buffer_size_;
+    int data_buffer_size_;
     string protocol_;
     map<string, int> DATA_TYPES;
 
