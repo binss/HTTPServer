@@ -1,11 +1,11 @@
 /***********************************************************
-* FileName:      mapper.cpp
+* FileName:      Mapper.cpp
 * Author:        binss
 * Create:        2015-11-06 11:24:22
 * Description:   No Description
 ***********************************************************/
 
-#include "mapper.h"
+#include "Mapper.h"
 
 const string TEMPLATES_DIR = "/home/binss/HTTPServer/templates";
 const string RESOURCES_DIR = "/home/binss/HTTPServer/resources";
@@ -46,7 +46,7 @@ void Mapper::InitContentTypeMap()
 void Mapper::InitURIMap()
 {
     uri_map_["/"] = "/index.html";
-    uri_map_["/404/"] = "/error/403.html";
+    uri_map_["/403/"] = "/error/403.html";
     uri_map_["/404/"] = "/error/404.html";
 }
 

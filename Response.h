@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include "CacheManager.h"
+
 using namespace std;
 
 class Response
@@ -28,14 +30,12 @@ public:
 
 private:
     unordered_map<string, string> header_;
+    int type_;
     char * buffer_;
     int buffer_length_;
-    char * data_buffer_;
-    int data_buffer_length_;
-    int type_;
     int buffer_size_;
-    int data_buffer_size_;
     string protocol_;
+    Cache *cache_;
     map<string, int> DATA_TYPES;
 
 };

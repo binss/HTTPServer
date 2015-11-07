@@ -13,21 +13,30 @@
 #include <cstring>
 #include <sstream>
 
-#include "mapper.h"
+#include "GlobalUtil.h"
+#include "Mapper.h"
 #include "Response.h"
 
 #define NORMAL_DATA_SIZE 1024 * 1024
 #define BIG_DATA_SIZE 1024 * 1024 * 10
 #define INFO_BUFFER_SIZE 1024
 
+template<class TO, class TI>
+inline TO ToType(const TI& input_obj)
+{
+    stringstream ss;
+    ss << input_obj;
+
+    TO output_obj;
+    ss >> output_obj;
+
+    return output_obj;
+}
 
 Response::Response()
 {
-    data_buffer_ = NULL;
     buffer_ = NULL;
     buffer_length_ = 0;
-    data_buffer_length_ = 0;
-    data_buffer_size_ = 0;
     buffer_size_ = 0;
 }
 
@@ -59,25 +68,10 @@ int Response::Init(unordered_map<string, string> &request_header)
     return 0;
 }
 
-
-template<class TO, class TI>
-inline TO ToType(const TI& input_obj)
-{
-    stringstream ss;
-    ss << input_obj;
-
-    TO output_obj;
-    ss >> output_obj;
-
-    return output_obj;
-}
-
-
 int Response::LoadData(string uri)
 {
     string path;
     string file_type;
-    FILE* template_file = NULL;
     if(uri != "")
     {
         if(uri.find("..") == string::npos)
@@ -95,9 +89,8 @@ int Response::LoadData(string uri)
             printf("[debug]file type: %s[%d]\n", file_type.c_str(), type_);
 
             path = Mapper::GetInstance()->GetURI(uri, type_);
-            template_file = fopen(path.c_str(), "r");
-
-            if( NULL == template_file)
+            cache_ = CacheManager::GetInstance()->GetCache(path, type_);
+            if( NULL == cache_)
             {
                 type_ = 1;
                 path = Mapper::GetInstance()->GetURI("/404/", type_);
@@ -149,54 +142,32 @@ int Response::LoadData(string uri)
         path = Mapper::GetInstance()->GetURI("/404/", type_);
     }
     printf("[debug]uri:%s, path:%s\n", uri.c_str(), path.c_str());
-
+    cache_ = CacheManager::GetInstance()->GetCache(path, type_);
+    if(NULL == cache_)
+    {
+        printf("[error]GetCache error\n");
+        return -1;
+    }
 
     if(type_ < 20)
     {
-        if(data_buffer_ == NULL)
+        if(buffer_ == NULL)
         {
-            data_buffer_ = new char[NORMAL_DATA_SIZE];
             buffer_ = new char[NORMAL_DATA_SIZE + INFO_BUFFER_SIZE];
-            data_buffer_size_ = NORMAL_DATA_SIZE;
             buffer_size_ = NORMAL_DATA_SIZE + INFO_BUFFER_SIZE;
         }
     }
     if(type_ >= 20)
     {
-        header_["Content-Length"] = ToType<string, int>(data_buffer_length_);
-        header_["Accept-Ranges"] = "bytes";
-
-        if(data_buffer_ == NULL || data_buffer_size_ < BIG_DATA_SIZE)
+        if(buffer_ == NULL || buffer_size_ < BIG_DATA_SIZE + INFO_BUFFER_SIZE)
         {
-            delete []data_buffer_;
             delete []buffer_;
-            data_buffer_ = new char[BIG_DATA_SIZE];
             buffer_ = new char[BIG_DATA_SIZE + INFO_BUFFER_SIZE];
-            data_buffer_size_ = BIG_DATA_SIZE;
             buffer_size_ = BIG_DATA_SIZE + INFO_BUFFER_SIZE;
         }
     }
-    printf("[debug]data_buffer_size_ %d buffer_size_ %d\n", data_buffer_size_, buffer_size_);
+    printf("[debug]buffer_size_: %d\n", buffer_size_);
     Reset();
-
-    if( NULL == template_file)
-    {
-        template_file = fopen(path.c_str(), "r");
-    }
-    if( NULL == template_file)
-    {
-        printf("[error]can not read: %s\n", path.c_str());
-        return -1;
-    }
-
-
-    int length = fread(data_buffer_, sizeof(data_buffer_[0]), data_buffer_size_ - 1, template_file);
-    if(length > 0)
-    {
-        data_buffer_length_ = length;
-    }
-    // printf("[debug]data buffer len %d\n", data_buffer_length_);
-    fclose(template_file);
 
     if(protocol_ == "HTTP/1.1" && type_ < 10)
     {
@@ -204,7 +175,7 @@ int Response::LoadData(string uri)
     }
     if(type_ >= 10)
     {
-        header_["Content-Length"] = ToType<string, int>(data_buffer_length_);
+        header_["Content-Length"] = ToType<string, int>(cache_->size_);
         header_["Accept-Ranges"] = "bytes";
     }
 
@@ -237,18 +208,19 @@ int Response::Build()
     buffer_length_ += header_str.length();
     if(type_ >= 10)
     {
-        memcpy(buffer_ + buffer_length_, data_buffer_, data_buffer_length_);
-        buffer_length_ += data_buffer_length_;
+        memcpy(buffer_ + buffer_length_, cache_->data_, cache_->size_);
+        buffer_length_ += cache_->size_;
     }
     else
     {
         char content_length[20];
-        sprintf(content_length, "%x\r\n", data_buffer_length_);
+        sprintf(content_length, "%x\r\n", cache_->size_);
         memcpy(buffer_ + buffer_length_, content_length, strlen(content_length));
         buffer_length_ += strlen(content_length);
 
-        memcpy(buffer_ + buffer_length_, data_buffer_, data_buffer_length_);
-        buffer_length_ += data_buffer_length_;
+        memcpy(buffer_ + buffer_length_, cache_->data_, cache_->size_);
+        buffer_length_ += cache_->size_;
+
 
         char buffer_end[20] = "\r\n0\r\n\r\n";
         memcpy(buffer_ + buffer_length_, buffer_end, strlen(buffer_end));
@@ -272,8 +244,7 @@ int Response::GetBufferLength()
 int Response::Reset()
 {
     buffer_length_ = 0;
-    data_buffer_length_ = 0;
     memset(buffer_, 0, buffer_size_);
-    memset(data_buffer_, 0, data_buffer_size_);
     return 0;
 }
+

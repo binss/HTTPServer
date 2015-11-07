@@ -8,14 +8,13 @@
 ***********************************************************/
 
 
-#include "Request.h"
 #include <iostream>
 #include <stdlib.h>
 #include <boost/algorithm/string/regex.hpp>
+#include <sstream>
 
-Request::Request()
-{
-}
+#include "Request.h"
+#include "GlobalUtil.h"
 
 template<class TO, class TI>
 inline TO ToType(const TI& input_obj)
@@ -28,6 +27,11 @@ inline TO ToType(const TI& input_obj)
 
     return output_obj;
 }
+
+Request::Request()
+{
+}
+
 
 int Request::Parse(char buf[], int len)
 {

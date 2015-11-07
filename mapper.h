@@ -1,5 +1,5 @@
 /***********************************************************
-* FileName:      mapper.h
+* FileName:      Mapper.h
 * Author:        binss
 * Create:        2015-11-03 22:12:36
 * Description:   简单的单例工具类，不考虑线程安全等
