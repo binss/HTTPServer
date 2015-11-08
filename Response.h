@@ -13,6 +13,7 @@
 #include <vector>
 #include <unordered_map>
 #include "CacheManager.h"
+#include "Logger.h"
 
 using namespace std;
 
@@ -20,6 +21,7 @@ class Response
 {
 public:
     Response();
+    ~Response();
     int Init(unordered_map<string, string> &request_header);
     int GetTime(char * time, int length);
     int Build();
@@ -34,10 +36,8 @@ private:
     char * buffer_;
     int buffer_length_;
     int buffer_size_;
-    string protocol_;
     Cache *cache_;
-    map<string, int> DATA_TYPES;
-
+    Logger *logger_;
 };
 
 #endif

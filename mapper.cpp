@@ -41,6 +41,7 @@ void Mapper::InitContentTypeMap()
     content_type_map_["png"] = 20;
     content_type_map_["jpg"] = 21;
     content_type_map_["gif"] = 22;
+    content_type_map_["ico"] = 23;
 }
 
 void Mapper::InitURIMap()

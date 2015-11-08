@@ -17,9 +17,8 @@
 #include "Mapper.h"
 #include "Response.h"
 
-#define NORMAL_DATA_SIZE 1024 * 1024
-#define BIG_DATA_SIZE 1024 * 1024 * 10
-#define INFO_BUFFER_SIZE 1024
+#define NORMAL_BUFFER_SIZE 1024 * 1024 + 2048
+#define BIG_BUFFER_SIZE 1024 * 1024 * 10 + 2048
 
 template<class TO, class TI>
 inline TO ToType(const TI& input_obj)
@@ -35,15 +34,24 @@ inline TO ToType(const TI& input_obj)
 
 Response::Response()
 {
+    cache_ = NULL;
     buffer_ = NULL;
     buffer_length_ = 0;
     buffer_size_ = 0;
+    type_ = 0;
+    logger_ = new Logger("Response", DEBUG, false);
 }
 
+Response::~Response()
+{
+    delete []buffer_;
+    buffer_ = NULL;
+    header_.clear();
+}
 
 int Response::Init(unordered_map<string, string> &request_header)
 {
-    header_.clear();
+    Reset();
 
     if(request_header["Connection"] == "keep-alive")
     {
@@ -59,10 +67,17 @@ int Response::Init(unordered_map<string, string> &request_header)
         header_["Expires"] = string(time_buf);
     }
 
-    protocol_ = request_header["protocol"];
-    if(request_header["uri"] != "")
+
+    LoadData(request_header["uri"]);
+
+    if(request_header["protocol"] == "HTTP/1.1" && type_ < 10)
     {
-        LoadData(request_header["uri"]);
+        header_["Transfer-Encoding"] = "chunked";
+    }
+    if(type_ >= 10)
+    {
+        header_["Content-Length"] = ToType<string, int>(cache_->size_);
+        header_["Accept-Ranges"] = "bytes";
     }
 
     return 0;
@@ -116,6 +131,7 @@ int Response::LoadData(string uri)
                 case 20:
                 case 21:
                 case 22:
+                case 23:
                 {
                     header_["Content-Type"] = "image/" + file_type;
                     break;
@@ -153,30 +169,18 @@ int Response::LoadData(string uri)
     {
         if(buffer_ == NULL)
         {
-            buffer_ = new char[NORMAL_DATA_SIZE + INFO_BUFFER_SIZE];
-            buffer_size_ = NORMAL_DATA_SIZE + INFO_BUFFER_SIZE;
+            buffer_ = new char[NORMAL_BUFFER_SIZE];
+            buffer_size_ = NORMAL_BUFFER_SIZE;
         }
     }
     if(type_ >= 20)
     {
-        if(buffer_ == NULL || buffer_size_ < BIG_DATA_SIZE + INFO_BUFFER_SIZE)
+        if(buffer_ == NULL || buffer_size_ < BIG_BUFFER_SIZE)
         {
             delete []buffer_;
-            buffer_ = new char[BIG_DATA_SIZE + INFO_BUFFER_SIZE];
-            buffer_size_ = BIG_DATA_SIZE + INFO_BUFFER_SIZE;
+            buffer_ = new char[BIG_BUFFER_SIZE];
+            buffer_size_ = BIG_BUFFER_SIZE;
         }
-    }
-    printf("[debug]buffer_size_: %d\n", buffer_size_);
-    Reset();
-
-    if(protocol_ == "HTTP/1.1" && type_ < 10)
-    {
-        header_["Transfer-Encoding"] = "chunked";
-    }
-    if(type_ >= 10)
-    {
-        header_["Content-Length"] = ToType<string, int>(cache_->size_);
-        header_["Accept-Ranges"] = "bytes";
     }
 
     return 0;
@@ -243,6 +247,7 @@ int Response::GetBufferLength()
 
 int Response::Reset()
 {
+    header_.clear();
     buffer_length_ = 0;
     memset(buffer_, 0, buffer_size_);
     return 0;
