@@ -13,6 +13,7 @@
 #include <string>
 #include <unordered_map>
 #include <cstring>
+#include "Logger.h"
 
 using namespace std;
 
@@ -47,6 +48,7 @@ private:
     bool IsInit_;
     unordered_map<string, Cache *> caches_;
     char buffer_[BIG_DATA_SIZE];
+    Logger logger_;
 
 };
 

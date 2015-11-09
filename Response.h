@@ -23,12 +23,12 @@ public:
     Response();
     ~Response();
     int Init(unordered_map<string, string> &request_header);
-    int GetTime(char * time, int length);
     int Build();
     int Reset();
     int LoadData(string uri);
     char * GetBuffer();
     int GetBufferLength();
+    int SetCookie(const char *name, const char *value, string expires, const char *domain=NULL, const char *path=NULL, bool secure=false);
 
 private:
     unordered_map<string, string> header_;
@@ -37,7 +37,7 @@ private:
     int buffer_length_;
     int buffer_size_;
     Cache *cache_;
-    Logger *logger_;
+    Logger logger_;
 };
 
 #endif

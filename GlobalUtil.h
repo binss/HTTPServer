@@ -8,7 +8,14 @@
 #ifndef  __GLOBAL_UTIL_H__
 #define  __GLOBAL_UTIL_H__
 
+#include <time.h>
+#include <string>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 using namespace std;
 
-
+string GetTime(int offset);
+string GetCurFormatTime(string format);
+void EnsureDirectory(const char * path);
 #endif

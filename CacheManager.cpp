@@ -18,7 +18,7 @@ CacheManager * CacheManager::GetInstance()
     return manager;
 }
 
-CacheManager::CacheManager()
+CacheManager::CacheManager():logger_("CacheManager", DEBUG, true)
 {
 
 }
@@ -36,7 +36,7 @@ Cache * CacheManager::GetCache(string path, int type)
         FILE * template_file = fopen(path.c_str(), "r");
         if( NULL == template_file)
         {
-            printf("[error]can not find file: %s\n", path.c_str());
+            logger_<<ERROR<<"Can not find file: "<<path<<endl;
             return NULL;
         }
         CleanBuffer();
@@ -50,14 +50,13 @@ Cache * CacheManager::GetCache(string path, int type)
             memcpy(cache->data_, buffer_ , length);
             caches_[path] = cache;
         }
-        // printf("[debug]data buffer len %d\n", data_buffer_length_);
         fclose(template_file);
     }
     else
     {
         // cache hit
         cache->hit_time_ ++;
-        printf("[debug]hit cache, size:%d\n", cache->size_);
+        logger_<<DEBUG<<"Hit cache: size:"<<cache->size_<<endl;
     }
     return cache;
 

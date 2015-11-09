@@ -5,21 +5,31 @@
 * Description:   No Description
 ***********************************************************/
 
-#ifndef __CONSTANTS__
-#define __CONSTANTS__
+#ifndef __CONSTANTS_H__
+#define __CONSTANTS_H__
+
+#define TIME_BUFFER_LEN 50
+#define SERV_PORT 8888
+#define LISTENQ 1024    /* 2nd argument to listen() */
+#define EPOLL_SIZE 1024
+#define EPOLL_TIMEOUT 500
+#define BUFFER_SIZE 1024
+
+#define NORMAL_BUFFER_SIZE 1024 * 1024 + 2048
+#define BIG_BUFFER_SIZE 1024 * 1024 * 10 + 2048
 
 
-const char LOG_FILE_PATH[50] = "/home/binss/HTTPServer/log/";
+#define LOG_FILE_PATH "/home/binss/HTTPServer/log/"
 
 
 enum LogLevel
 {
-  VERBOSE = 0,
-  DEBUG,
-  INFO,
-  WARNING,
-  ERROR,
-  CRITICAL
+    VERBOSE = 0,
+    DEBUG,
+    INFO,
+    WARNING,
+    ERROR,
+    CRITICAL
 };
 
 

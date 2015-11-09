@@ -17,9 +17,6 @@
 #include "Mapper.h"
 #include "Response.h"
 
-#define NORMAL_BUFFER_SIZE 1024 * 1024 + 2048
-#define BIG_BUFFER_SIZE 1024 * 1024 * 10 + 2048
-
 template<class TO, class TI>
 inline TO ToType(const TI& input_obj)
 {
@@ -32,14 +29,13 @@ inline TO ToType(const TI& input_obj)
     return output_obj;
 }
 
-Response::Response()
+Response::Response():logger_("Response", DEBUG, true)
 {
     cache_ = NULL;
     buffer_ = NULL;
     buffer_length_ = 0;
     buffer_size_ = 0;
     type_ = 0;
-    logger_ = new Logger("Response", DEBUG, false);
 }
 
 Response::~Response()
@@ -57,16 +53,10 @@ int Response::Init(unordered_map<string, string> &request_header)
     {
         header_["Connection"] = "keep-alive";
     }
-    header_["Set-Cookie"] = "dudu";
     header_["Server"] = "Dudu Server/0.1";
-    char time_buf[128];
-    int ret = GetTime(time_buf, 128);
-    if( 0 == ret )
-    {
-        header_["Date"] = string(time_buf);
-        header_["Expires"] = string(time_buf);
-    }
 
+    header_["Date"] = GetTime(0);
+    header_["Expires"] = GetTime(0);
 
     LoadData(request_header["uri"]);
 
@@ -80,6 +70,31 @@ int Response::Init(unordered_map<string, string> &request_header)
         header_["Accept-Ranges"] = "bytes";
     }
 
+    return 0;
+}
+
+int Response::SetCookie(const char *name, const char *value, string expires, const char *domain, const char *path, bool secure)
+{
+    stringstream buffer;
+    buffer<<name<<"="<<value<<"; "<<"expires="<<expires<<"; ";
+    if( NULL != domain )
+    {
+        buffer<<"domain="<<domain<<"; ";
+    }
+    if( NULL != path)
+    {
+        buffer<<"path="<<path<<"; ";
+    }
+    if( secure )
+    {
+        buffer<<"secure; ";
+    }
+    string key = "Set-Cookie";
+    while( "" != header_[key])
+    {
+        key += " ";
+    }
+    header_[key] = buffer.str();
     return 0;
 }
 
@@ -101,7 +116,7 @@ int Response::LoadData(string uri)
             {
                 type_ = 1;
             }
-            printf("[debug]file type: %s[%d]\n", file_type.c_str(), type_);
+            logger_<<DEBUG<<"File type: "<<file_type<<"["<<type_<<"]"<<endl;
 
             path = Mapper::GetInstance()->GetURI(uri, type_);
             cache_ = CacheManager::GetInstance()->GetCache(path, type_);
@@ -138,7 +153,7 @@ int Response::LoadData(string uri)
                 }
                 default:
                 {
-                    printf("[error]can not recognize type: %s, set to default type\n", file_type.c_str());
+                    logger_<<ERROR<<"Can not recognize type: "<<file_type<<" set to default type(text)"<<endl;
                     header_["Content-Type"] = "text/html";
                 }
             }
@@ -157,11 +172,12 @@ int Response::LoadData(string uri)
         type_ = 1;
         path = Mapper::GetInstance()->GetURI("/404/", type_);
     }
-    printf("[debug]uri:%s, path:%s\n", uri.c_str(), path.c_str());
+
+    logger_<<DEBUG<<"URI: "<<uri<<", Path: "<<path<<endl;
     cache_ = CacheManager::GetInstance()->GetCache(path, type_);
     if(NULL == cache_)
     {
-        printf("[error]GetCache error\n");
+        logger_<<ERROR<<"Get cache instance error!"<<endl;
         return -1;
     }
 
@@ -183,19 +199,6 @@ int Response::LoadData(string uri)
         }
     }
 
-    return 0;
-}
-
-int Response::GetTime(char * time_buf, int length)
-{
-    if(time_buf == NULL)
-    {
-        return -1;
-    }
-    time_t now_time;
-    time(&now_time);
-    struct tm *now_time_ptr = localtime(&now_time);
-    strftime(time_buf, length, "%a %b %d %T %Y GMT", now_time_ptr);
     return 0;
 }
 
@@ -240,7 +243,6 @@ char * Response::GetBuffer()
 
 int Response::GetBufferLength()
 {
-    // printf("[debug]%d\n", buffer_length_);
     return buffer_length_;
 }
 

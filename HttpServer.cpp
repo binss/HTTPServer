@@ -15,14 +15,9 @@
 
 #include "Request.h"
 #include "Response.h"
+#include "GlobalUtil.h"
 
 using namespace std;
-
-#define SERV_PORT 8888
-#define LISTENQ 1024    /* 2nd argument to listen() */
-#define EPOLL_SIZE 1024
-#define EPOLL_TIMEOUT 500
-#define BUFFER_SIZE 1024
 
 int listenfd, epfd;
 
@@ -33,11 +28,12 @@ public:
     {
         recv_length = 0;
         send_length = 0;
+        memset(buffer, 0, sizeof(buffer));
+
     }
     int BuildRequest()
     {
         return request_.Parse(buffer, recv_length);
-        return 0;
     }
 
     int BuildResponse()
@@ -45,6 +41,9 @@ public:
         int ret = response_.Init(request_.GetHeader());
         if( 0 == ret)
         {
+            response_.SetCookie("username", "binss", GetTime(0));
+            response_.SetCookie("email", "i@binss.me", GetTime(0));
+
             return response_.Build();
         }
         return ret;
@@ -76,12 +75,11 @@ public:
 };
 
 unordered_map<int, Connection *> connections;
-Logger logger("Server", VERBOSE, false);
+Logger logger("Server", DEBUG, true);
 
 int HandleHttpRequest(int epfd, int sockfd)
 {
     int ret;
-    int length;
     errno = 0;
     unordered_map<int, Connection *>::iterator search = connections.find(sockfd);
     Connection *pConnection;
@@ -99,7 +97,7 @@ int HandleHttpRequest(int epfd, int sockfd)
     char* pBuffer = pConnection->buffer;
     while(true)
     {
-        length = recv(sockfd, pBuffer + pConnection->recv_length, BUFFER_SIZE - pConnection->recv_length, 0);
+        int length = recv(sockfd, pBuffer + pConnection->recv_length, BUFFER_SIZE - pConnection->recv_length, 0);
         if(length > 0)
         {
             pConnection->recv_length += length;
@@ -117,6 +115,7 @@ int HandleHttpRequest(int epfd, int sockfd)
             return 0;
         }
     }
+
     pConnection->BuildRequest();
 
     logger<<VERBOSE<<"HandleHttpRequest: length: "<<pConnection->recv_length<<" fd: "<<sockfd<<endl;
@@ -246,6 +245,11 @@ int HandleNewRequest(int listenfd)
 void sighandler ( int sig )
 {
     close(listenfd);
+    for(unordered_map<int, Connection *>::iterator iter = connections.begin(); iter != connections.end(); ++iter)
+    {
+        close(iter->second->fd);
+    }
+
     logger<<INFO<<"Http Server closed"<<endl;
     exit(0);
 }
@@ -259,7 +263,6 @@ int main()
     signal ( SIGTERM, &sighandler );
     signal ( SIGINT, &sighandler );
 
-    int event_count;
     struct sockaddr_in servaddr;
     struct epoll_event event, events[EPOLL_SIZE];
     // 初始化监听socket
@@ -303,7 +306,7 @@ int main()
     for( ; ; )
     {
         // 如有描述符就绪
-        event_count = epoll_wait(epfd, events, EPOLL_SIZE, EPOLL_TIMEOUT);
+        int event_count = epoll_wait(epfd, events, EPOLL_SIZE, EPOLL_TIMEOUT);
 
         for(int i = 0; i < event_count; i++)
         {
@@ -338,3 +341,4 @@ int main()
     }
     return 0;
 }
+

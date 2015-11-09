@@ -28,19 +28,18 @@ inline TO ToType(const TI& input_obj)
     return output_obj;
 }
 
-Request::Request()
+Request::Request():logger_("Request", DEBUG, true)
 {
 }
 
 
 int Request::Parse(char buf[], int len)
 {
-    if( len <= 0 )
+    if( NULL == buf || len <= 0 )
     {
-        cout<<"request error! lenght:"<<len<<endl;
+        logger_<<ERROR<<"Request error!"<<endl;
         return -1;
     }
-    // printf("buffer\n%s\n\n\n", buf);
     string str(buf);
     vector<string> parts;
     vector<string> lines;
@@ -49,15 +48,14 @@ int Request::Parse(char buf[], int len)
     split_regex(parts, str, regex( "\r\n\r\n" ));
     if(parts.size() != 2)
     {
-        cout<<"part decode error! lenght:"<<parts.size()<<endl;
-        // cout<<"[a]"<<parts[0]<<endl<<"[b]"<<parts[1]<<endl<<"[c]"<<parts[2]<<endl<<"[end]"<<endl;
+        logger_<<ERROR<<"Part decode error! lenght:"<<parts.size()<<endl;
         return -2;
     }
     // 解析header
     split_regex(lines, parts[0], regex( "\r\n" ));
     if(lines.size() <= 0)
     {
-        cout<<"header decode error!"<<endl;
+        logger_<<ERROR<<"Header decode error! header:"<<parts[0]<<endl;
         return -3;
     }
     // 对于第一行作特殊处理
@@ -66,7 +64,7 @@ int Request::Parse(char buf[], int len)
         boost::split(metas, lines[0], boost::is_any_of(" "));
         if(metas.size() != 3)
         {
-            cout<<"header meta decode error!"<<endl;
+            logger_<<ERROR<<"Header meta decode error! meta:"<<lines[0]<<endl;
             return -2;
         }
         header_["method"] = metas[0];
@@ -75,18 +73,16 @@ int Request::Parse(char buf[], int len)
     }
     for (size_t i = 1; i < lines.size(); ++ i)
     {
-        // cout << lines[i] << endl;
         regex reg("(.*): (.*)");
         if ( boost::regex_search(lines[i], token, reg) )
         {
-            // cout << token.size() << std::endl;
             if( token.size() == 3 )
             {
                 header_[token[1]] = token[2];
             }
             else
             {
-                cout<<"header line decode error: "<<token[0]<<endl;
+                logger_<<ERROR<<"Header line decode error! meta:"<<token[0]<<endl;
             }
         }
     }
@@ -96,10 +92,9 @@ int Request::Parse(char buf[], int len)
     {
         if(parts[1].length() != ToType<unsigned int, string>(header_["Content-Length"]))
         {
-            cout<<"warning: The length of data is not equal to the Content-Length!"<<endl;
+            logger_<<WARNING<<"The length of data["<<parts[1].length()<<"] is not equal to the Content-Length["<<header_["Content-Length"]<<"]!"<<endl;
         }
         data_ = parts[1];
-        // cout<<"data: "<<data_<<endl;
     }
 
     return 0;

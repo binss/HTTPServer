@@ -15,6 +15,7 @@
 #include <boost/regex.hpp>
 #include <vector>
 #include <unordered_map>
+#include "Logger.h"
 
 using namespace std;
 using namespace boost;
@@ -30,6 +31,7 @@ public:
 
     unordered_map<string, string> header_;
     string data_;
+    Logger logger_;
 };
 
 #endif
