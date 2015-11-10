@@ -21,26 +21,30 @@ inline TO ToType(const TI& input_obj)
 {
     stringstream ss;
     ss << input_obj;
-
     TO output_obj;
     ss >> output_obj;
-
     return output_obj;
 }
 
 Request::Request():logger_("Request", DEBUG, true)
 {
+    buffer_ = new char[REQUEST_BUFFER_SIZE];
 }
 
-
-int Request::Parse(char buf[], int len)
+Request::~Request()
 {
-    if( NULL == buf || len <= 0 )
+    delete [] buffer_;
+    buffer_ = NULL;
+}
+
+int Request::Parse(int length)
+{
+    if( NULL == buffer_ || length <= 0 )
     {
         logger_<<ERROR<<"Request error!"<<endl;
         return -1;
     }
-    string str(buf);
+    string str(buffer_);
     vector<string> parts;
     vector<string> lines;
     boost::smatch token;
@@ -104,7 +108,11 @@ int Request::Reset()
 {
     header_.clear();
     data_.clear();
+    memset(buffer_, 0, REQUEST_BUFFER_SIZE);
     return 0;
 }
 
-
+char * Request::GetBuffer()
+{
+    return buffer_;
+}

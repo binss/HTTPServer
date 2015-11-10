@@ -13,66 +13,12 @@
 #include <sys/ioctl.h>
 #include <signal.h>
 
-#include "Request.h"
-#include "Response.h"
-#include "GlobalUtil.h"
+#include "Connection.h"
 
 using namespace std;
 
 int listenfd, epfd;
 
-class Connection
-{
-public:
-    Connection(int sockfd=0):fd(sockfd)
-    {
-        recv_length = 0;
-        send_length = 0;
-        memset(buffer, 0, sizeof(buffer));
-
-    }
-    int BuildRequest()
-    {
-        return request_.Parse(buffer, recv_length);
-    }
-
-    int BuildResponse()
-    {
-        int ret = response_.Init(request_.GetHeader());
-        if( 0 == ret)
-        {
-            response_.SetCookie("username", "binss", GetTime(0));
-            response_.SetCookie("email", "i@binss.me", GetTime(0));
-
-            return response_.Build();
-        }
-        return ret;
-    }
-    char * GetResponse()
-    {
-        return response_.GetBuffer();
-    }
-    int GetResponseLength()
-    {
-        return response_.GetBufferLength();
-    }
-    int Reset()
-    {
-        recv_length = 0;
-        send_length = 0;
-        memset(buffer, 0, sizeof(buffer));
-        request_.Reset();
-        response_.Reset();
-        return 0;
-    }
-public:
-    int fd;
-    char buffer[BUFFER_SIZE];
-    int recv_length;
-    int send_length;
-    Request request_;
-    Response response_;
-};
 
 unordered_map<int, Connection *> connections;
 Logger logger("Server", DEBUG, true);
@@ -94,10 +40,10 @@ int HandleHttpRequest(int epfd, int sockfd)
         pConnection = new Connection(sockfd);
         connections[sockfd] = pConnection;
     }
-    char* pBuffer = pConnection->buffer;
+    char* pBuffer = pConnection->pBuffer;
     while(true)
     {
-        int length = recv(sockfd, pBuffer + pConnection->recv_length, BUFFER_SIZE - pConnection->recv_length, 0);
+        int length = recv(sockfd, pBuffer + pConnection->recv_length, REQUEST_BUFFER_SIZE - pConnection->recv_length, 0);
         if(length > 0)
         {
             pConnection->recv_length += length;
@@ -116,7 +62,7 @@ int HandleHttpRequest(int epfd, int sockfd)
         }
     }
 
-    pConnection->BuildRequest();
+    pConnection->PostRecv();
 
     logger<<VERBOSE<<"HandleHttpRequest: length: "<<pConnection->recv_length<<" fd: "<<sockfd<<endl;
 
@@ -136,19 +82,18 @@ int HandleHttpResponse(int epfd, int sockfd)
     errno = 0;
 
     Connection *pConnection = connections[sockfd];
-    pConnection->BuildResponse();
-    // string & response_str = pConnection->GetResponse();
-    char * response = pConnection->GetResponse();
+    int length = pConnection->PreSend();
+
     while(true)
     {
         //检查有无已读取还未写入的
-        int remain_lenght = pConnection->GetResponseLength() - pConnection->send_length;
+        int remain_length = length - pConnection->send_length;
         // const char * buffer = response_str.c_str();
-        if (remain_lenght > 0)
+        if (remain_length > 0)
         {
-            int lenght = send(sockfd, response + pConnection->send_length, remain_lenght, 0);
+            int lenght = send(sockfd, pConnection->pBuffer + pConnection->send_length, remain_length, 0);
             pConnection->send_length += lenght;
-            if(lenght != remain_lenght)
+            if(lenght != remain_length)
             {
                 // 缓冲区已满，返回
                 return -1;
@@ -223,7 +168,7 @@ int HandleNewRequest(int listenfd)
         char dest[30];
         inet_ntop(AF_INET, &cliaddr.sin_addr, dest, 30);
 
-        logger<<INFO<<"HandleNewRequest: new socket: "<<dest<<", port: "<<ntohs(cliaddr.sin_port)<<" fd: "<<connfd<<endl;
+        logger<<DEBUG<<"HandleNewRequest: new socket: "<<dest<<", port: "<<ntohs(cliaddr.sin_port)<<" fd: "<<connfd<<endl;
 
         // 接受连接
         struct epoll_event event;
@@ -247,7 +192,7 @@ void sighandler ( int sig )
     close(listenfd);
     for(unordered_map<int, Connection *>::iterator iter = connections.begin(); iter != connections.end(); ++iter)
     {
-        close(iter->second->fd);
+        close(iter->first);
     }
 
     logger<<INFO<<"Http Server closed"<<endl;

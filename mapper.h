@@ -11,6 +11,9 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include "View.h"
+#include "Constants.h"
+
 using namespace std;
 
 
@@ -24,14 +27,17 @@ public:
     static Mapper * GetInstance();
     void InitContentTypeMap();
     void InitURIMap();
+    void InitViewMap();
 
     int GetContentType(string file_type);
-    string GetURI(string request_uri, int content_type);
+    string GetURI(int code);
+    View GetView(string request_uri);
 
 private:
     static Mapper *mapper;
     unordered_map<string, int> content_type_map_;
-    unordered_map<string, string> uri_map_;
+    unordered_map<int, string> uri_map_;
+    unordered_map<string, View> view_map_;
 
 };
 

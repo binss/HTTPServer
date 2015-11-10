@@ -22,10 +22,8 @@ inline TO ToType(const TI& input_obj)
 {
     stringstream ss;
     ss << input_obj;
-
     TO output_obj;
     ss >> output_obj;
-
     return output_obj;
 }
 
@@ -40,15 +38,13 @@ Response::Response():logger_("Response", DEBUG, true)
 
 Response::~Response()
 {
-    delete []buffer_;
+    delete [] buffer_;
     buffer_ = NULL;
     header_.clear();
 }
 
 int Response::Init(unordered_map<string, string> &request_header)
 {
-    Reset();
-
     if(request_header["Connection"] == "keep-alive")
     {
         header_["Connection"] = "keep-alive";
@@ -58,7 +54,7 @@ int Response::Init(unordered_map<string, string> &request_header)
     header_["Date"] = GetTime(0);
     header_["Expires"] = GetTime(0);
 
-    LoadData(request_header["uri"]);
+    UriDecode(request_header["uri"]);
 
     if(request_header["protocol"] == "HTTP/1.1" && type_ < 10)
     {
@@ -98,7 +94,19 @@ int Response::SetCookie(const char *name, const char *value, string expires, con
     return 0;
 }
 
-int Response::LoadData(string uri)
+int Response::SetFile(string path)
+{
+    path_ = TEMPLATES_DIR + path;
+    cache_ = CacheManager::GetInstance()->GetCache(path_, type_);
+    if(NULL == cache_)
+    {
+        logger_<<ERROR<<"Get cache instance error!"<<endl;
+        return -1;
+    }
+    return 0;
+}
+
+int Response::UriDecode(string uri)
 {
     string path;
     string file_type;
@@ -114,71 +122,33 @@ int Response::LoadData(string uri)
             }
             else
             {
-                type_ = 1;
+                type_ = 0;
             }
             logger_<<DEBUG<<"File type: "<<file_type<<"["<<type_<<"]"<<endl;
 
-            path = Mapper::GetInstance()->GetURI(uri, type_);
-            cache_ = CacheManager::GetInstance()->GetCache(path, type_);
+            cache_ = CacheManager::GetInstance()->GetCache(uri, type_);
             if( NULL == cache_)
             {
-                type_ = 1;
-                path = Mapper::GetInstance()->GetURI("/404/", type_);
+                type_ = 0;
+                code_ = 404;
             }
-
-            switch(type_)
+            else
             {
-                case 1:
-                {
-                    header_["Content-Type"] = "text/html";
-                    break;
-                }
-                case 10:
-                {
-                    header_["Content-Type"] = "text/javascript";
-                    break;
-                }
-                case 11:
-                {
-                    header_["Content-Type"] = "text/css";
-                    break;
-                }
-                case 20:
-                case 21:
-                case 22:
-                case 23:
-                {
-                    header_["Content-Type"] = "image/" + file_type;
-                    break;
-                }
-                default:
-                {
-                    logger_<<ERROR<<"Can not recognize type: "<<file_type<<" set to default type(text)"<<endl;
-                    header_["Content-Type"] = "text/html";
-                }
+                code_ = 200;
             }
 
         }
         else
         {
             // 禁止.. 防止目录外文件被返回 直接返回403
-            type_ = 1;
-            path = Mapper::GetInstance()->GetURI("/403/", type_);
-
+            type_ = 0;
+            code_ = 403;
         }
     }
     else
     {
-        type_ = 1;
-        path = Mapper::GetInstance()->GetURI("/404/", type_);
-    }
-
-    logger_<<DEBUG<<"URI: "<<uri<<", Path: "<<path<<endl;
-    cache_ = CacheManager::GetInstance()->GetCache(path, type_);
-    if(NULL == cache_)
-    {
-        logger_<<ERROR<<"Get cache instance error!"<<endl;
-        return -1;
+        type_ = 0;
+        code_ = 404;
     }
 
     if(type_ < 20)
@@ -199,11 +169,59 @@ int Response::LoadData(string uri)
         }
     }
 
+    logger_<<DEBUG<<"URI: "<<uri<<", Path: "<<path<<endl;
+
     return 0;
 }
 
 int Response::Build()
 {
+    switch(type_)
+    {
+        case 1:
+        {
+            header_["Content-Type"] = "text/html"; break;
+        }
+        case 10:
+        {
+            header_["Content-Type"] = "text/javascript"; break;
+        }
+        case 11:
+        {
+            header_["Content-Type"] = "text/css"; break;
+        }
+        case 20:
+        {
+            header_["Content-Type"] = "image/png"; break;
+        }
+        case 21:
+        {
+            header_["Content-Type"] = "image/jpg"; break;
+        }
+        case 22:
+        {
+            header_["Content-Type"] = "image/gif"; break;
+        }
+        case 23:
+        {
+            header_["Content-Type"] = "image/ico"; break;
+        }
+        default:
+        {
+            // logger_<<ERROR<<"Can not recognize type: "<<file_type<<" set to default type(text)"<<endl;
+            header_["Content-Type"] = "text/html";
+        }
+    }
+
+
+
+    cache_ = CacheManager::GetInstance()->GetCache(path_, type_);
+    if(NULL == cache_)
+    {
+        logger_<<ERROR<<"Get cache instance error!"<<endl;
+        return -1;
+    }
+
     string header_str = "HTTP/1.1 200 OK\r\n";
     for(unordered_map<string, string>::iterator iter = header_.begin(); iter != header_.end(); ++ iter)
     {
@@ -246,6 +264,10 @@ int Response::GetBufferLength()
     return buffer_length_;
 }
 
+int Response::GetType()
+{
+    return type_;
+}
 
 int Response::Reset()
 {

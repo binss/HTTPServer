@@ -25,10 +25,15 @@ class Request
 {
 public:
     Request();
-    unordered_map<string, string> &GetHeader(){ return header_; };
-    int Parse(char *buf, int len);
-    int Reset();
+    ~Request();
 
+    unordered_map<string, string> &GetHeader(){ return header_; };
+    int Parse(int length);
+    int Reset();
+    char * GetBuffer();
+
+private:
+    char * buffer_;
     unordered_map<string, string> header_;
     string data_;
     Logger logger_;
