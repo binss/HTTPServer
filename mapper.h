@@ -28,16 +28,19 @@ public:
     void InitContentTypeMap();
     void InitURIMap();
     void InitViewMap();
+    void InitReasonMap();
 
     int GetContentType(string file_type);
     string GetURI(int code);
     View GetView(string request_uri);
+    string & GetReason(int code);
 
 private:
     static Mapper *mapper;
     unordered_map<string, int> content_type_map_;
     unordered_map<int, string> uri_map_;
     unordered_map<string, View> view_map_;
+    unordered_map<int, string> reason_map_;
 
 };
 

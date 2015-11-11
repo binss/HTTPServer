@@ -33,6 +33,15 @@ Cache * CacheManager::GetCache(string path, int type)
     if(NULL == cache)
     {
         // cache miss
+        if(type == 0)
+        {
+            path = TEMPLATES_DIR + path;
+        }
+        else
+        {
+            path = RESOURCES_DIR + path;
+        }
+        logger_<<DEBUG<<"path:"<<path<<endl;
         FILE * template_file = fopen(path.c_str(), "r");
         if( NULL == template_file)
         {

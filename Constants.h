@@ -21,7 +21,7 @@
 
 #define LOG_FILE_PATH "/home/binss/HTTPServer/log/"
 
-#define TEMPLATES_DIR "/home/binss/HTTPServer/templates/"
+#define TEMPLATES_DIR "/home/binss/HTTPServer/templates"
 #define RESOURCES_DIR "/home/binss/HTTPServer/resources"
 
 enum LogLevel

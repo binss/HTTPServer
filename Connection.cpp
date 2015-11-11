@@ -8,7 +8,7 @@
 #include "Connection.h"
 #include "Mapper.h"
 
-Connection::Connection(int sockfd=0)
+Connection::Connection(int sockfd=0):logger_("Connection", DEBUG, true)
 {
     sockfd_ = sockfd;
     recv_length = 0;
@@ -33,8 +33,12 @@ int Connection::PreSend()
     {
         if( 0 == response_.GetType())
         {
-            View view = Mapper::GetInstance()->GetView(request_.GetHeader()["uri"]);
-            view(request_, response_);
+            logger_<<DEBUG<<response_.GetTarget()<<endl;
+            View view = Mapper::GetInstance()->GetView(response_.GetTarget());
+            if( NULL != view)
+            {
+                view(request_, response_);
+            }
         }
 
         ret = response_.Build();

@@ -24,6 +24,7 @@ Mapper::Mapper()
     InitContentTypeMap();
     InitURIMap();
     InitViewMap();
+    InitReasonMap();
 }
 
 void Mapper::InitContentTypeMap()
@@ -48,6 +49,17 @@ void Mapper::InitURIMap()
     uri_map_[403] = "/error/403.html";
     uri_map_[404] = "/error/404.html";
 }
+
+void Mapper::InitReasonMap()
+{
+    // 0 - 9 chucked
+    reason_map_[200] = "200 OK";
+    reason_map_[403] = "403 Forbidden";
+    reason_map_[404] = "404 Not Found";
+
+}
+
+
 
 int Mapper::GetContentType(string file_type)
 {
@@ -83,6 +95,9 @@ string Mapper::GetURI(int code)
 void Mapper::InitViewMap()
 {
     view_map_["/"] = main_page;
+    view_map_["/404/"] = error_404;
+    view_map_["/403/"] = error_403;
+
 }
 
 
@@ -90,4 +105,9 @@ View Mapper::GetView(string request_uri)
 {
     View view = view_map_[request_uri];
     return view;
+}
+
+string & Mapper::GetReason(int code)
+{
+    return reason_map_[code];
 }

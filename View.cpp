@@ -14,3 +14,15 @@ void main_page(Request &request, Response &response)
     response.SetCookie("email", "i@binss.me", GetTime(0));
     response.SetFile("index.html");
 }
+
+void error_404(Request &request, Response &response)
+{
+    response.SetCode(404);
+    response.SetFile("error/404.html");
+}
+
+void error_403(Request &request, Response &response)
+{
+    response.SetCode(403);
+    response.SetFile("error/403.html");
+}

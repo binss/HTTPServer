@@ -31,8 +31,9 @@ public:
     int SetCookie(const char *name, const char *value, string expires, const char *domain=NULL, const char *path=NULL, bool secure=false);
     int GetType();
     int UriDecode(string uri);
-    int SetFile(string path);
-
+    void SetFile(string path);
+    void SetCode(int code);
+    string GetTarget();
 private:
     unordered_map<string, string> header_;
     int type_;
@@ -41,9 +42,11 @@ private:
     int buffer_size_;
     string uri;
     string path_;
+    string target_;
     Cache *cache_;
     Logger logger_;
     int code_;
+    string reason_;
 };
 
 #endif

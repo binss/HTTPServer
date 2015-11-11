@@ -34,6 +34,7 @@ Response::Response():logger_("Response", DEBUG, true)
     buffer_length_ = 0;
     buffer_size_ = 0;
     type_ = 0;
+    code_ = 200;
 }
 
 Response::~Response()
@@ -53,6 +54,7 @@ int Response::Init(unordered_map<string, string> &request_header)
 
     header_["Date"] = GetTime(0);
     header_["Expires"] = GetTime(0);
+    logger_<<DEBUG<<"URI: "<<request_header["uri"]<<endl;
 
     UriDecode(request_header["uri"]);
 
@@ -94,21 +96,23 @@ int Response::SetCookie(const char *name, const char *value, string expires, con
     return 0;
 }
 
-int Response::SetFile(string path)
+void Response::SetFile(string path)
 {
-    path_ = TEMPLATES_DIR + path;
+    path_ = "/" + path;
     cache_ = CacheManager::GetInstance()->GetCache(path_, type_);
     if(NULL == cache_)
     {
         logger_<<ERROR<<"Get cache instance error!"<<endl;
-        return -1;
     }
-    return 0;
+}
+
+void Response::SetCode(int code)
+{
+    code_ = code;
 }
 
 int Response::UriDecode(string uri)
 {
-    string path;
     string file_type;
     if(uri != "")
     {
@@ -119,36 +123,34 @@ int Response::UriDecode(string uri)
             {
                 file_type = uri.substr(uri.length() - 3);
                 type_ = Mapper::GetInstance()->GetContentType(file_type);
+                cache_ = CacheManager::GetInstance()->GetCache(uri, type_);
+                if( NULL == cache_)
+                {
+                    type_ = 0;
+                    target_ = "/404/";
+                }
+                else
+                {
+                    target_ = uri;
+                }
             }
             else
             {
                 type_ = 0;
+                target_ = uri;
             }
-            logger_<<DEBUG<<"File type: "<<file_type<<"["<<type_<<"]"<<endl;
 
-            cache_ = CacheManager::GetInstance()->GetCache(uri, type_);
-            if( NULL == cache_)
-            {
-                type_ = 0;
-                code_ = 404;
-            }
-            else
-            {
-                code_ = 200;
-            }
 
         }
         else
         {
             // 禁止.. 防止目录外文件被返回 直接返回403
-            type_ = 0;
-            code_ = 403;
+            target_ = "/403/";
         }
     }
     else
     {
-        type_ = 0;
-        code_ = 404;
+        target_ = "/404/";
     }
 
     if(type_ < 20)
@@ -169,7 +171,7 @@ int Response::UriDecode(string uri)
         }
     }
 
-    logger_<<DEBUG<<"URI: "<<uri<<", Path: "<<path<<endl;
+    logger_<<DEBUG<<"URI: "<<uri<<" target: "<<target_<<" File type: "<<file_type<<"["<<type_<<"]"<<endl;
 
     return 0;
 }
@@ -215,14 +217,16 @@ int Response::Build()
 
 
 
-    cache_ = CacheManager::GetInstance()->GetCache(path_, type_);
-    if(NULL == cache_)
-    {
-        logger_<<ERROR<<"Get cache instance error!"<<endl;
-        return -1;
-    }
+    // cache_ = CacheManager::GetInstance()->GetCache(path_, type_);
+    // if(NULL == cache_)
+    // {
+    //     logger_<<ERROR<<"Get cache instance error!"<<endl;
+    //     return -1;
+    // }
 
-    string header_str = "HTTP/1.1 200 OK\r\n";
+    reason_ = Mapper::GetInstance()->GetReason(code_);
+    string method = "HTTP/1.1";
+    string header_str = method + " " + reason_ + "\r\n";
     for(unordered_map<string, string>::iterator iter = header_.begin(); iter != header_.end(); ++ iter)
     {
         header_str += (*iter).first + ": " + (*iter).second + "\r\n";
@@ -269,8 +273,15 @@ int Response::GetType()
     return type_;
 }
 
+string Response::GetTarget()
+{
+    return target_;
+}
+
 int Response::Reset()
 {
+    type_ = 0;
+    code_ = 200;
     header_.clear();
     buffer_length_ = 0;
     memset(buffer_, 0, buffer_size_);

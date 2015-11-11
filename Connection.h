@@ -13,6 +13,7 @@
 #include "Response.h"
 #include "GlobalUtil.h"
 
+
 class Connection
 {
 public:
@@ -31,6 +32,7 @@ private:
     int sockfd_;
     Request request_;
     Response response_;
+    Logger logger_;
 
 };
 
