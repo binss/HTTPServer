@@ -36,6 +36,7 @@ private:
     char * buffer_;
     unordered_map<string, string> header_;
     string data_;
+    unordered_map<string, string> cookie_;
     Logger logger_;
 };
 

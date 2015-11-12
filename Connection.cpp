@@ -29,22 +29,31 @@ int Connection::PostRecv()
 int Connection::PreSend()
 {
     int ret = response_.Init(request_.GetHeader());
-    if( 0 == ret)
+    if( 0 == ret )
     {
         if( 0 == response_.GetType())
         {
-            logger_<<DEBUG<<response_.GetTarget()<<endl;
             View view = Mapper::GetInstance()->GetView(response_.GetTarget());
-            if( NULL != view)
+            if( NULL == view)
+            {
+                logger_<<CRITICAL<<"The view is NULL"<<endl;
+            }
+            else
             {
                 view(request_, response_);
             }
         }
+        else
+        {
+            response_.SetCode(200);
+        }
 
         ret = response_.Build();
-
-        pBuffer = response_.GetBuffer();
-        return response_.GetBufferLength();
+        if( 0 == ret )
+        {
+            pBuffer = response_.GetBuffer();
+            return response_.GetBufferLength();
+        }
     }
     return ret;
 }
@@ -58,3 +67,13 @@ int Connection::Reset()
     pBuffer = request_.GetBuffer();
     return 0;
 }
+
+int Connection::Close()
+{
+    // 出错处理
+    logger_<<DEBUG<<"Connection["<<sockfd_<<"] closed"<<endl;
+    Reset();
+    close(sockfd_);
+    return 0;
+}
+

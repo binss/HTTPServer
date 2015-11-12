@@ -19,10 +19,9 @@ Mapper * Mapper::GetInstance()
 }
 
 
-Mapper::Mapper()
+Mapper::Mapper():logger_("Mapper", DEBUG, true)
 {
     InitContentTypeMap();
-    InitURIMap();
     InitViewMap();
     InitReasonMap();
 }
@@ -43,13 +42,6 @@ void Mapper::InitContentTypeMap()
     content_type_map_["ico"] = 23;
 }
 
-void Mapper::InitURIMap()
-{
-    // uri_map_["/"] = "/index.html";
-    uri_map_[403] = "/error/403.html";
-    uri_map_[404] = "/error/404.html";
-}
-
 void Mapper::InitReasonMap()
 {
     // 0 - 9 chucked
@@ -67,31 +59,6 @@ int Mapper::GetContentType(string file_type)
     return content_type_map_[file_type];
 }
 
-string Mapper::GetURI(int code)
-{
-    // 默认为0
-    string uri = uri_map_[code];
-    return uri;
-}
-
-// string Mapper::GetURI(string request_uri)
-// {
-//     // 默认为0
-//     string uri = uri_map_[request_uri];
-//     if(uri == "")
-//     {
-//         uri = request_uri;
-//     }
-//     if(content_type < 10)
-//     {
-//         return TEMPLATES_DIR + uri;
-//     }
-//     else
-//     {
-//         return RESOURCES_DIR + uri;
-//     }
-// }
-
 void Mapper::InitViewMap()
 {
     view_map_["/"] = main_page;
@@ -101,9 +68,14 @@ void Mapper::InitViewMap()
 }
 
 
-View Mapper::GetView(string request_uri)
+View Mapper::GetView(string target)
 {
-    View view = view_map_[request_uri];
+    View view = view_map_[target];
+    if(NULL == view)
+    {
+        logger_<<"Can not find the view of the target["<<target<<"]"<<endl;
+        return view_map_["/404/"];
+    }
     return view;
 }
 

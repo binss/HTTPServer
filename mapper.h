@@ -13,32 +13,30 @@
 #include <unordered_map>
 #include "View.h"
 #include "Constants.h"
+#include "Logger.h"
 
 using namespace std;
 
 
 class Mapper
 {
-private:
-    Mapper();
-
-
 public:
     static Mapper * GetInstance();
-    void InitContentTypeMap();
-    void InitURIMap();
-    void InitViewMap();
-    void InitReasonMap();
-
     int GetContentType(string file_type);
-    string GetURI(int code);
-    View GetView(string request_uri);
+    View GetView(string target);
     string & GetReason(int code);
 
 private:
+    Mapper();
+    void InitContentTypeMap();
+    void InitViewMap();
+    void InitReasonMap();
+
+private:
     static Mapper *mapper;
+    Logger logger_;
+
     unordered_map<string, int> content_type_map_;
-    unordered_map<int, string> uri_map_;
     unordered_map<string, View> view_map_;
     unordered_map<int, string> reason_map_;
 

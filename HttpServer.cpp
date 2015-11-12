@@ -1,4 +1,3 @@
-#include <iostream>
 #include <sys/types.h>
 #include <sys/socket.h>  /* basic socket definitions */
 #include <sys/time.h>    /* timeval{} for select() */
@@ -14,8 +13,6 @@
 #include <signal.h>
 
 #include "Connection.h"
-
-using namespace std;
 
 int listenfd, epfd;
 
@@ -62,7 +59,11 @@ int HandleHttpRequest(int epfd, int sockfd)
         }
     }
 
-    pConnection->PostRecv();
+    if( 0 != pConnection->PostRecv() )
+    {
+        pConnection->Close();
+        return -1;
+    }
 
     logger<<VERBOSE<<"HandleHttpRequest: length: "<<pConnection->recv_length<<" fd: "<<sockfd<<endl;
 
@@ -79,10 +80,15 @@ int HandleHttpRequest(int epfd, int sockfd)
 
 int HandleHttpResponse(int epfd, int sockfd)
 {
-    errno = 0;
-
+    // errno = 0;
     Connection *pConnection = connections[sockfd];
     int length = pConnection->PreSend();
+    if(length < 0)
+    {
+        // error, close the socket
+        pConnection->Close();
+        return -1;
+    }
 
     while(true)
     {

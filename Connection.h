@@ -22,6 +22,7 @@ public:
     int PreSend();
     int PostRecv();
     int Reset();
+    int Close();
 
 public:
     int recv_length;

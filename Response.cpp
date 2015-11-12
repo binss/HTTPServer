@@ -12,6 +12,7 @@
 #include <string>
 #include <cstring>
 #include <sstream>
+#include <zlib.h>
 
 #include "GlobalUtil.h"
 #include "Mapper.h"
@@ -34,7 +35,7 @@ Response::Response():logger_("Response", DEBUG, true)
     buffer_length_ = 0;
     buffer_size_ = 0;
     type_ = 0;
-    code_ = 200;
+    code_ = 0;
 }
 
 Response::~Response()
@@ -46,74 +47,52 @@ Response::~Response()
 
 int Response::Init(unordered_map<string, string> &request_header)
 {
-    if(request_header["Connection"] == "keep-alive")
-    {
-        header_["Connection"] = "keep-alive";
-    }
-    header_["Server"] = "Dudu Server/0.1";
-
-    header_["Date"] = GetTime(0);
-    header_["Expires"] = GetTime(0);
-    logger_<<DEBUG<<"URI: "<<request_header["uri"]<<endl;
-
     UriDecode(request_header["uri"]);
 
-    if(request_header["protocol"] == "HTTP/1.1" && type_ < 10)
+    header_["Server"] = "Dudu Server/0.1";
+    header_["Date"] = GetTime(0);
+    // 失效时间
+    header_["Expires"] = GetTime(0);
+
+
+    method_ = request_header["protocol"];
+    if(method_ == "HTTP/1.0")
     {
-        header_["Transfer-Encoding"] = "chunked";
-    }
-    if(type_ >= 10)
-    {
+        if(request_header["Connection"] == "keep-alive")
+        {
+            header_["Connection"] = "keep-alive";
+        }
+
         header_["Content-Length"] = ToType<string, int>(cache_->size_);
-        header_["Accept-Ranges"] = "bytes";
+    }
+    else if(method_ == "HTTP/1.1")
+    {
+        // 对于页面，分chunked发送
+        // TODO：分chucked
+        if(type_ == 0)
+        {
+            header_["Transfer-Encoding"] = "chunked";
+
+        }
+        else
+        {
+            header_["Content-Length"] = ToType<string, int>(cache_->size_);
+        }
+        // Cache-Control: no-cache
+        // 对于Connection: close的请求，需要在回复后close
     }
 
+    // 接收范围请求
+    // header_["Accept-Ranges"] = "bytes";
+
+    // Accept-Encoding:gzip, deflate, sdch
+    // Content-Encoding:gzip
     return 0;
-}
-
-int Response::SetCookie(const char *name, const char *value, string expires, const char *domain, const char *path, bool secure)
-{
-    stringstream buffer;
-    buffer<<name<<"="<<value<<"; "<<"expires="<<expires<<"; ";
-    if( NULL != domain )
-    {
-        buffer<<"domain="<<domain<<"; ";
-    }
-    if( NULL != path)
-    {
-        buffer<<"path="<<path<<"; ";
-    }
-    if( secure )
-    {
-        buffer<<"secure; ";
-    }
-    string key = "Set-Cookie";
-    while( "" != header_[key])
-    {
-        key += " ";
-    }
-    header_[key] = buffer.str();
-    return 0;
-}
-
-void Response::SetFile(string path)
-{
-    path_ = "/" + path;
-    cache_ = CacheManager::GetInstance()->GetCache(path_, type_);
-    if(NULL == cache_)
-    {
-        logger_<<ERROR<<"Get cache instance error!"<<endl;
-    }
-}
-
-void Response::SetCode(int code)
-{
-    code_ = code;
 }
 
 int Response::UriDecode(string uri)
 {
-    string file_type;
+    string file_type = "default";
     if(uri != "")
     {
         if(uri.find("..") == string::npos)
@@ -153,6 +132,7 @@ int Response::UriDecode(string uri)
         target_ = "/404/";
     }
 
+    // 分配内存
     if(type_ < 20)
     {
         if(buffer_ == NULL)
@@ -171,26 +151,20 @@ int Response::UriDecode(string uri)
         }
     }
 
-    logger_<<DEBUG<<"URI: "<<uri<<" target: "<<target_<<" File type: "<<file_type<<"["<<type_<<"]"<<endl;
-
-    return 0;
-}
-
-int Response::Build()
-{
     switch(type_)
     {
+        case 0:
         case 1:
         {
-            header_["Content-Type"] = "text/html"; break;
+            header_["Content-Type"] = "text/html; charset=UTF-8"; break;
         }
         case 10:
         {
-            header_["Content-Type"] = "text/javascript"; break;
+            header_["Content-Type"] = "text/javascript; charset=UTF-8"; break;
         }
         case 11:
         {
-            header_["Content-Type"] = "text/css"; break;
+            header_["Content-Type"] = "text/css; charset=UTF-8"; break;
         }
         case 20:
         {
@@ -210,23 +184,28 @@ int Response::Build()
         }
         default:
         {
-            // logger_<<ERROR<<"Can not recognize type: "<<file_type<<" set to default type(text)"<<endl;
+            logger_<<ERROR<<"Can not recognize type: "<<file_type<<" set to default type"<<endl;
             header_["Content-Type"] = "text/html";
         }
     }
 
+    logger_<<DEBUG<<"URI: "<<uri<<" target: "<<target_<<" File type: "<<file_type<<"["<<type_<<"]"<<endl;
+
+    return 0;
+}
 
 
-    // cache_ = CacheManager::GetInstance()->GetCache(path_, type_);
-    // if(NULL == cache_)
-    // {
-    //     logger_<<ERROR<<"Get cache instance error!"<<endl;
-    //     return -1;
-    // }
 
-    reason_ = Mapper::GetInstance()->GetReason(code_);
+int Response::Build()
+{
+    if( 0 == code_ )
+    {
+        logger_<<ERROR<<"The response code should be set!"<<endl;
+        return -1;
+    }
+    string reason = Mapper::GetInstance()->GetReason(code_);
     string method = "HTTP/1.1";
-    string header_str = method + " " + reason_ + "\r\n";
+    string header_str = method + " " + reason + "\r\n";
     for(unordered_map<string, string>::iterator iter = header_.begin(); iter != header_.end(); ++ iter)
     {
         header_str += (*iter).first + ": " + (*iter).second + "\r\n";
@@ -258,6 +237,18 @@ int Response::Build()
     return 0;
 }
 
+int Response::Reset()
+{
+    type_ = 0;
+    code_ = 0;
+    target_ = "";
+    header_.clear();
+    buffer_length_ = 0;
+    memset(buffer_, 0, buffer_size_);
+    return 0;
+}
+
+
 char * Response::GetBuffer()
 {
     return buffer_;
@@ -278,13 +269,42 @@ string Response::GetTarget()
     return target_;
 }
 
-int Response::Reset()
+int Response::SetCookie(const char *name, const char *value, string expires, const char *domain, const char *path, bool secure)
 {
-    type_ = 0;
-    code_ = 200;
-    header_.clear();
-    buffer_length_ = 0;
-    memset(buffer_, 0, buffer_size_);
+    stringstream buffer;
+    buffer<<name<<"="<<value<<"; "<<"expires="<<expires<<"; ";
+    if( NULL != domain )
+    {
+        buffer<<"domain="<<domain<<"; ";
+    }
+    if( NULL != path)
+    {
+        buffer<<"path="<<path<<"; ";
+    }
+    if( secure )
+    {
+        buffer<<"secure; ";
+    }
+    string key = "Set-Cookie";
+    while( "" != header_[key])
+    {
+        key += " ";
+    }
+    header_[key] = buffer.str();
     return 0;
 }
 
+void Response::SetFile(string path)
+{
+    path = "/" + path;
+    cache_ = CacheManager::GetInstance()->GetCache(path, type_);
+    if(NULL == cache_)
+    {
+        logger_<<ERROR<<"Get cache instance error!"<<endl;
+    }
+}
+
+void Response::SetCode(int code)
+{
+    code_ = code;
+}

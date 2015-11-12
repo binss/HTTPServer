@@ -12,6 +12,7 @@ void main_page(Request &request, Response &response)
 {
     response.SetCookie("username", "binss", GetTime(0));
     response.SetCookie("email", "i@binss.me", GetTime(0));
+    response.SetCode(200);
     response.SetFile("index.html");
 }
 

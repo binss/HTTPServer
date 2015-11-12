@@ -101,6 +101,12 @@ int Request::Parse(int length)
         data_ = parts[1];
     }
 
+    // TODO
+    // 处理cookie
+    // 处理url参数
+    // 处理If-Modified-Since -返回304
+    //
+
     return 0;
 }
 
