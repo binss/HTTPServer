@@ -30,6 +30,7 @@ inline TO ToType(const TI& input_obj)
 
 Response::Response():logger_("Response", DEBUG, true)
 {
+    compress_ = false;
     cache_ = NULL;
     buffer_ = NULL;
     buffer_length_ = 0;
@@ -49,44 +50,22 @@ int Response::Init(unordered_map<string, string> &request_header)
 {
     UriDecode(request_header["uri"]);
 
-    header_["Server"] = "Dudu Server/0.1";
-    header_["Date"] = GetTime(0);
-    // 失效时间
-    header_["Expires"] = GetTime(0);
-
 
     method_ = request_header["protocol"];
-    if(method_ == "HTTP/1.0")
-    {
-        if(request_header["Connection"] == "keep-alive")
-        {
-            header_["Connection"] = "keep-alive";
-        }
 
-        header_["Content-Length"] = ToType<string, int>(cache_->size_);
+    if(request_header["Accept-Encoding"].find("gzip") != string::npos)
+    {
+        compress_ = true;
     }
-    else if(method_ == "HTTP/1.1")
-    {
-        // 对于页面，分chunked发送
-        // TODO：分chucked
-        if(type_ == 0)
-        {
-            header_["Transfer-Encoding"] = "chunked";
 
-        }
-        else
-        {
-            header_["Content-Length"] = ToType<string, int>(cache_->size_);
-        }
-        // Cache-Control: no-cache
-        // 对于Connection: close的请求，需要在回复后close
+    if(request_header["Connection"] == "keep-alive")
+    {
+        keep_alive_ = true;
     }
 
     // 接收范围请求
     // header_["Accept-Ranges"] = "bytes";
 
-    // Accept-Encoding:gzip, deflate, sdch
-    // Content-Encoding:gzip
     return 0;
 }
 
@@ -151,6 +130,19 @@ int Response::UriDecode(string uri)
         }
     }
 
+
+    logger_<<DEBUG<<"URI: "<<uri<<" target: "<<target_<<" File type: "<<file_type<<"["<<type_<<"]"<<endl;
+
+    return 0;
+}
+
+int Response::BuildHeader()
+{
+    header_["Server"] = "Dudu Server/0.1";
+    header_["Date"] = GetTime(0);
+    // 失效时间
+    header_["Expires"] = GetTime(0);
+
     switch(type_)
     {
         case 0:
@@ -184,16 +176,56 @@ int Response::UriDecode(string uri)
         }
         default:
         {
-            logger_<<ERROR<<"Can not recognize type: "<<file_type<<" set to default type"<<endl;
+            logger_<<ERROR<<"Can not recognize type["<<type_<<"], set to default type[0]"<<endl;
             header_["Content-Type"] = "text/html";
         }
     }
 
-    logger_<<DEBUG<<"URI: "<<uri<<" target: "<<target_<<" File type: "<<file_type<<"["<<type_<<"]"<<endl;
-
+    if(method_ == "HTTP/1.0")
+    {
+        if(keep_alive_)
+        {
+            header_["Connection"] = "keep-alive";
+        }
+        if(compress_)
+        {
+            header_["Content-Length"] = ToType<string, uLong>(cache_->compress_size_);
+            header_["Content-Encoding"] = "gzip";
+        }
+        else
+        {
+            header_["Content-Length"] = ToType<string, uLong>(cache_->size_);
+        }
+    }
+    else if(method_ == "HTTP/1.1")
+    {
+        // 对于页面，分chunked发送
+        // TODO：分chucked
+        if(type_ == 0)
+        {
+            header_["Transfer-Encoding"] = "chunked";
+            if(compress_)
+            {
+                header_["Content-Encoding"] = "gzip";
+            }
+        }
+        else
+        {
+            if(compress_)
+            {
+                header_["Content-Length"] = ToType<string, uLong>(cache_->compress_size_);
+                header_["Content-Encoding"] = "gzip";
+            }
+            else
+            {
+                header_["Content-Length"] = ToType<string, uLong>(cache_->size_);
+            }
+        }
+        // Cache-Control: no-cache
+        // 对于Connection: close的请求，需要在回复后close
+    }
     return 0;
 }
-
 
 
 int Response::Build()
@@ -203,6 +235,19 @@ int Response::Build()
         logger_<<ERROR<<"The response code should be set!"<<endl;
         return -1;
     }
+
+    if(compress_ && COMPRESS_ON && cache_->compress_size_ > 0 && cache_->compress_data_ != NULL)
+    {
+        compress_ = true;
+    }
+    else
+    {
+        compress_ = false;
+    }
+
+    BuildHeader();
+
+
     string reason = Mapper::GetInstance()->GetReason(code_);
     string method = "HTTP/1.1";
     string header_str = method + " " + reason + "\r\n";
@@ -214,31 +259,47 @@ int Response::Build()
 
     memcpy(buffer_, header_str.c_str(), header_str.length());
     buffer_length_ += header_str.length();
-    if(type_ >= 10)
+
+    uLong size;
+    unsigned char *data;
+    if(compress_)
     {
-        memcpy(buffer_ + buffer_length_, cache_->data_, cache_->size_);
-        buffer_length_ += cache_->size_;
+        size = cache_->compress_size_;
+        data = cache_->compress_data_;
     }
     else
     {
+        size = cache_->size_;
+        data = cache_->data_;
+    }
+
+    if(type_ == 0)
+    {
         char content_length[20];
-        sprintf(content_length, "%x\r\n", cache_->size_);
+
+        sprintf(content_length, "%lx\r\n", size);
         memcpy(buffer_ + buffer_length_, content_length, strlen(content_length));
         buffer_length_ += strlen(content_length);
 
-        memcpy(buffer_ + buffer_length_, cache_->data_, cache_->size_);
-        buffer_length_ += cache_->size_;
+        memcpy(buffer_ + buffer_length_, data, size);
+        buffer_length_ += size;
 
 
         char buffer_end[20] = "\r\n0\r\n\r\n";
         memcpy(buffer_ + buffer_length_, buffer_end, strlen(buffer_end));
         buffer_length_ += strlen(buffer_end);
     }
+    else
+    {
+        memcpy(buffer_ + buffer_length_, data, size);
+        buffer_length_ += size;
+    }
     return 0;
 }
 
 int Response::Reset()
 {
+    compress_ = false;
     type_ = 0;
     code_ = 0;
     target_ = "";

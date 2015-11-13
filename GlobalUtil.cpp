@@ -38,3 +38,34 @@ void EnsureDirectory(const char * path)
         mkdir(path, 0700);
     }
 }
+
+
+int Compress(unsigned char *dest, uLong & dest_len, unsigned char *src, uLong src_len, int level)
+{
+    int ret;
+    z_stream strm;
+    /* allocate deflate state */
+    strm.zalloc = Z_NULL;
+    strm.zfree = Z_NULL;
+    strm.opaque = Z_NULL;
+    ret = deflateInit2(&strm, level, Z_DEFLATED, 16 + MAX_WBITS, 8, Z_DEFAULT_STRATEGY);
+    // deflateInit(&strm, level);
+    if (ret != Z_OK)
+    {
+        return ret;
+    }
+
+    strm.next_in = src;
+    strm.avail_in = src_len;
+
+    // flush = feof(source) ? Z_FINISH : Z_NO_FLUSH;
+
+    strm.next_out  = dest;
+    strm.avail_out = dest_len;
+
+    ret = deflate(&strm, Z_FINISH);
+    dest_len = dest_len - strm.avail_out;
+
+    (void)deflateEnd(&strm);
+}
+

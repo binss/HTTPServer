@@ -13,9 +13,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <zlib.h>
+
 using namespace std;
 
 string GetTime(int offset);
 string GetCurFormatTime(string format);
 void EnsureDirectory(const char * path);
+int Compress(unsigned char *dest, uLong & dest_len, unsigned char *src, uLong src_len, int level);
 #endif

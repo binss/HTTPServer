@@ -49,14 +49,40 @@ Cache * CacheManager::GetCache(string path, int type)
             return NULL;
         }
         CleanBuffer();
-        int length = fread(buffer_, sizeof(char), BIG_DATA_SIZE - 1, template_file);
+        int length = fread(buffer_, sizeof(unsigned char), BIG_DATA_SIZE - 1, template_file);
         if(length > 0)
         {
             cache = new Cache();
             cache->type_ = type;
             cache->size_ = length;
-            cache->data_ = new char[length];
+            cache->data_ = new unsigned char[length];
             memcpy(cache->data_, buffer_ , length);
+            // compressable 只压缩文本(type<20)
+            if(COMPRESS_ON && cache->type_ < 20)
+            {
+                if(COMPRESS_LEVEL > 0 && COMPRESS_LEVEL < 10)
+                {
+                    // 多分配COMPRESS_BUFFER_ADD_SIZE，防止越压越大
+                    cache->compress_data_ = new unsigned char[cache->size_ + COMPRESS_BUFFER_ADD_SIZE];
+                    cache->compress_size_ = cache->size_ + COMPRESS_BUFFER_ADD_SIZE;
+                    int ret = Compress(cache->compress_data_, cache->compress_size_, cache->data_, cache->size_, COMPRESS_LEVEL);
+                    if( 0 == ret )
+                    {
+                        logger_<<DEBUG<<"Compress succeed. Size["<<cache->size_<<"]->["<<cache->compress_size_<<"]"<<endl;
+                    }
+                    else
+                    {
+                        delete []cache->compress_data_;
+                        cache->compress_data_ = NULL;
+                        cache->compress_size_ = 0;
+                        logger_<<ERROR<<"Compress failed. Ret: "<<ret<<endl;
+                    }
+                }
+                else
+                {
+                    logger_<<ERROR<<"Compress level should be 1-9, current["<<COMPRESS_LEVEL<<"]"<<endl;
+                }
+            }
             caches_[path] = cache;
         }
         fclose(template_file);

@@ -18,11 +18,15 @@
 #define NORMAL_BUFFER_SIZE 1024 * 1024 + 2048
 #define BIG_BUFFER_SIZE 1024 * 1024 * 10 + 2048
 
+#define COMPRESS_BUFFER_ADD_SIZE 1024
 
 #define LOG_FILE_PATH "/home/binss/HTTPServer/log/"
 
 #define TEMPLATES_DIR "/home/binss/HTTPServer/templates"
 #define RESOURCES_DIR "/home/binss/HTTPServer/resources"
+
+#define COMPRESS_ON true
+#define COMPRESS_LEVEL 9
 
 enum LogLevel
 {

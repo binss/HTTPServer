@@ -23,6 +23,7 @@ public:
     Response();
     ~Response();
     int Init(unordered_map<string, string> &request_header);
+    int BuildHeader();
     int Build();
     int Reset();
 
@@ -49,6 +50,8 @@ private:
     string target_;
     Cache *cache_;
     Logger logger_;
+    bool compress_;
+    bool keep_alive_;
 };
 
 #endif

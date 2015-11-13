@@ -23,14 +23,21 @@ class Cache
 public:
     Cache()
     {
+        type_ = 0;
         hit_time_ = 0;
+        data_ = NULL;
+        size_ = 0;
+        compress_data_ = NULL;
+        compress_size_ = 0;
     }
 
 public:
     int type_;
-    int size_;
     int hit_time_;
-    char *data_;
+    unsigned char *data_;
+    uLong size_;
+    unsigned char *compress_data_;
+    uLong compress_size_;
 };
 
 class CacheManager
@@ -48,7 +55,7 @@ private:
     static CacheManager *manager;
     bool IsInit_;
     unordered_map<string, Cache *> caches_;
-    char buffer_[BIG_DATA_SIZE];
+    unsigned char buffer_[BIG_DATA_SIZE];
     Logger logger_;
 
 };
