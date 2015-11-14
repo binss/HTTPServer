@@ -11,15 +11,13 @@
 #define  __REQUEST_H__
 
 #include <string>
-#include <boost/algorithm/string.hpp>
-#include <boost/regex.hpp>
+#include <cstring>
 #include <vector>
 #include <unordered_map>
+#include <regex>
 #include "Logger.h"
 
 using namespace std;
-using namespace boost;
-
 
 class Request
 {

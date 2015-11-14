@@ -10,7 +10,6 @@
 
 #include <iostream>
 #include <stdlib.h>
-#include <boost/algorithm/string/regex.hpp>
 #include <sstream>
 
 #include "Request.h"
@@ -45,18 +44,19 @@ int Request::Parse(int length)
         return -1;
     }
     string str(buffer_);
-    vector<string> parts;
-    vector<string> lines;
-    boost::smatch token;
+    ;
+    ;
+
     // 先切出header和data
-    split_regex(parts, str, regex( "\r\n\r\n" ));
+    vector<string> parts = split(str, "\r\n\r\n");
+
     if(parts.size() != 2)
     {
         logger_<<ERROR<<"Part decode error! lenght:"<<parts.size()<<endl;
         return -2;
     }
     // 解析header
-    split_regex(lines, parts[0], regex( "\r\n" ));
+    vector<string> lines = split(parts[0], "\r\n");
     if(lines.size() <= 0)
     {
         logger_<<ERROR<<"Header decode error! header:"<<parts[0]<<endl;
@@ -64,8 +64,7 @@ int Request::Parse(int length)
     }
     // 对于第一行作特殊处理
     {
-        vector<string> metas;
-        boost::split(metas, lines[0], boost::is_any_of(" "));
+        vector<string> metas = split(lines[0], " ");
         if(metas.size() != 3)
         {
             logger_<<ERROR<<"Header meta decode error! meta:"<<lines[0]<<endl;
@@ -75,19 +74,19 @@ int Request::Parse(int length)
         header_["uri"] = metas[1];
         header_["protocol"] = metas[2];
     }
+
+    smatch token;
+    regex reg("(.*): (.*)");
     for (size_t i = 1; i < lines.size(); ++ i)
     {
-        regex reg("(.*): (.*)");
-        if ( boost::regex_search(lines[i], token, reg) )
+        regex_match(lines[i], token, reg);
+        if(token.size() == 3)
         {
-            if( token.size() == 3 )
-            {
-                header_[token[1]] = token[2];
-            }
-            else
-            {
-                logger_<<ERROR<<"Header line decode error! meta:"<<token[0]<<endl;
-            }
+            header_[token[1]] = token[2];
+        }
+        else
+        {
+            logger_<<ERROR<<"Header line decode error! meta:"<<token[0]<<endl;
         }
     }
 

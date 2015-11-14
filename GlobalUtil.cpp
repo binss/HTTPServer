@@ -57,9 +57,6 @@ int Compress(unsigned char *dest, uLong & dest_len, unsigned char *src, uLong sr
 
     strm.next_in = src;
     strm.avail_in = src_len;
-
-    // flush = feof(source) ? Z_FINISH : Z_NO_FLUSH;
-
     strm.next_out  = dest;
     strm.avail_out = dest_len;
 
@@ -67,5 +64,38 @@ int Compress(unsigned char *dest, uLong & dest_len, unsigned char *src, uLong sr
     dest_len = dest_len - strm.avail_out;
 
     (void)deflateEnd(&strm);
+    if(ret == Z_OK || ret == Z_STREAM_END)
+    {
+        return 0;
+    }
+    else
+    {
+        return ret;
+    }
 }
 
+vector<string> split(const string& s, const string& delim, const bool keep_empty)
+{
+    vector<string> result;
+    if (delim.empty())
+    {
+        result.push_back(s);
+        return result;
+    }
+    string::const_iterator substart = s.begin(), subend;
+    while(true)
+    {
+        subend = search(substart, s.end(), delim.begin(), delim.end());
+        string temp(substart, subend);
+        if (keep_empty || !temp.empty())
+        {
+            result.push_back(temp);
+        }
+        if (subend == s.end())
+        {
+            break;
+        }
+        substart = subend + delim.size();
+    }
+    return result;
+}
