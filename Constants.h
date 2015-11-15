@@ -28,6 +28,8 @@
 #define COMPRESS_ON true
 #define COMPRESS_LEVEL 9
 
+#define MAX_AGE 6000
+
 enum LogLevel
 {
     VERBOSE = 0,

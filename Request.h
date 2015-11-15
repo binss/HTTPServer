@@ -19,22 +19,31 @@
 
 using namespace std;
 
+
 class Request
 {
 public:
     Request();
     ~Request();
-
-    unordered_map<string, string> &GetHeader(){ return header_; };
     int Parse(int length);
     int Reset();
     char * GetBuffer();
 
 private:
+    int DecodeCookie(string cookie_str);
+
+public:
+    unordered_map<string, string> GET;
+    unordered_map<string, string> POST;
+    unordered_map<string, string> HEADER;
+    unordered_map<string, string> COOKIE;
+    string URI;
+    string METHOD;
+    string PROTOCOL;
+
+private:
     char * buffer_;
-    unordered_map<string, string> header_;
     string data_;
-    unordered_map<string, string> cookie_;
     Logger logger_;
 };
 

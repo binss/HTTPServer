@@ -22,7 +22,7 @@ class Response
 public:
     Response();
     ~Response();
-    int Init(unordered_map<string, string> &request_header);
+    int Init(Request &request);
     int BuildHeader();
     int Build();
     int Reset();
@@ -42,6 +42,9 @@ private:
 private:
     unordered_map<string, string> header_;
     string method_;
+    string protocol_;
+    string etag_;
+
     int code_;
     int type_;
     char * buffer_;

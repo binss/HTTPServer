@@ -28,7 +28,7 @@ int Connection::PostRecv()
 
 int Connection::PreSend()
 {
-    int ret = response_.Init(request_.GetHeader());
+    int ret = response_.Init(request_);
     if( 0 == ret )
     {
         if( 0 == response_.GetType())

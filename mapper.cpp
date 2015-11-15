@@ -46,6 +46,7 @@ void Mapper::InitReasonMap()
 {
     // 0 - 9 chucked
     reason_map_[200] = "200 OK";
+    reason_map_[304] = "304 Not Modified";
     reason_map_[403] = "403 Forbidden";
     reason_map_[404] = "404 Not Found";
 

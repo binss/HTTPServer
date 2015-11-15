@@ -46,22 +46,25 @@ Response::~Response()
     header_.clear();
 }
 
-int Response::Init(unordered_map<string, string> &request_header)
+int Response::Init(Request &request)
 {
-    UriDecode(request_header["uri"]);
+    UriDecode(request.URI);
 
+    unordered_map<string, string> & header = request.HEADER;
+    method_ = request.METHOD;
+    protocol_ = request.PROTOCOL;
 
-    method_ = request_header["protocol"];
-
-    if(request_header["Accept-Encoding"].find("gzip") != string::npos)
+    if(header["Accept-Encoding"].find("gzip") != string::npos)
     {
         compress_ = true;
     }
 
-    if(request_header["Connection"] == "keep-alive")
+    if(header["Connection"] == "keep-alive")
     {
         keep_alive_ = true;
     }
+
+    etag_ = header["If-None-Match"];
 
     // 接收范围请求
     // header_["Accept-Ranges"] = "bytes";
@@ -141,7 +144,7 @@ int Response::BuildHeader()
     header_["Server"] = "Dudu Server/0.1";
     header_["Date"] = GetTime(0);
     // 失效时间
-    header_["Expires"] = GetTime(0);
+    // header_["Expires"] = GetTime(EXPIRES_TIME);
 
     switch(type_)
     {
@@ -181,7 +184,7 @@ int Response::BuildHeader()
         }
     }
 
-    if(method_ == "HTTP/1.0")
+    if(protocol_ == "HTTP/1.0")
     {
         if(keep_alive_)
         {
@@ -197,7 +200,7 @@ int Response::BuildHeader()
             header_["Content-Length"] = ToType<string, uLong>(cache_->size_);
         }
     }
-    else if(method_ == "HTTP/1.1")
+    else if(protocol_ == "HTTP/1.1")
     {
         // 对于页面，分chunked发送
         // TODO：分chucked
@@ -208,6 +211,8 @@ int Response::BuildHeader()
             {
                 header_["Content-Encoding"] = "gzip";
             }
+            // 不缓存页面
+            header_["Cache-Control"] = "no-cache";
         }
         else
         {
@@ -220,8 +225,25 @@ int Response::BuildHeader()
             {
                 header_["Content-Length"] = ToType<string, uLong>(cache_->size_);
             }
+            // 设置cache时间
+            if(MAX_AGE > 0)
+            {
+                header_["Cache-Control"] = "max-age=" + ToType<string, int>(MAX_AGE);
+            }
+            else
+            {
+                header_["Cache-Control"] = "no-cache";
+            }
+
+            // 判断etag
+            if(etag_ == cache_->etag_)
+            {
+                header_["Content-Length"] = "0";
+                code_ = 304;
+            }
+            header_["Etag"] = cache_->etag_;
         }
-        // Cache-Control: no-cache
+
         // 对于Connection: close的请求，需要在回复后close
     }
     return 0;
@@ -248,9 +270,11 @@ int Response::Build()
     BuildHeader();
 
 
+
+
     string reason = Mapper::GetInstance()->GetReason(code_);
-    string method = "HTTP/1.1";
-    string header_str = method + " " + reason + "\r\n";
+    string protocol = "HTTP/1.1";
+    string header_str = protocol + " " + reason + "\r\n";
     for(unordered_map<string, string>::iterator iter = header_.begin(); iter != header_.end(); ++ iter)
     {
         header_str += (*iter).first + ": " + (*iter).second + "\r\n";
@@ -259,6 +283,11 @@ int Response::Build()
 
     memcpy(buffer_, header_str.c_str(), header_str.length());
     buffer_length_ += header_str.length();
+
+    if(code_ == 304)
+    {
+        return 0;
+    }
 
     uLong size;
     unsigned char *data;

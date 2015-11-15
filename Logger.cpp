@@ -97,6 +97,15 @@ Logger& Logger::operator<<(Logger& (*fun) (Logger&))
     return (*fun)(*this);
 }
 
+Logger& Logger::operator<<(unordered_map<string, string> &content)
+{
+    for(unordered_map<string, string>::iterator iter = content.begin(); iter != content.end(); ++ iter)
+    {
+        stream_<<"["<<(*iter).first + "]=[" + (*iter).second + "]\n";
+    }
+    return *this;
+}
+
 void Logger::Print()
 {
     if(line_level_ >= level_)

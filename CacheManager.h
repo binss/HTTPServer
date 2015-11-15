@@ -29,6 +29,7 @@ public:
         size_ = 0;
         compress_data_ = NULL;
         compress_size_ = 0;
+        etag_ = "1";
     }
 
 public:
@@ -38,6 +39,7 @@ public:
     uLong size_;
     unsigned char *compress_data_;
     uLong compress_size_;
+    string etag_;
 };
 
 class CacheManager

@@ -14,6 +14,8 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <unordered_map>
+
 #include "Constants.h"
 #include "GlobalUtil.h"
 
@@ -36,6 +38,7 @@ public:
     Logger& operator<<(string content);
     Logger& operator<<(int content);
     Logger& operator<<(unsigned int content);
+    Logger& operator<<(unordered_map<string, string> &content);
     Logger& operator<<(Logger& (*fun) (Logger&));
 
 private:

@@ -7,11 +7,17 @@
 
 #include "View.h"
 
+Logger LOG("View", DEBUG, true);
 
 void main_page(Request &request, Response &response)
 {
-    response.SetCookie("username", "binss", GetTime(0));
-    response.SetCookie("email", "i@binss.me", GetTime(0));
+    response.SetCookie("username", "binss", GetTime(60000));
+    response.SetCookie("email", "i@binss.me", GetTime(60000));
+
+    LOG<<DEBUG<<"\nGET\n"<<request.GET<<endl;
+    LOG<<DEBUG<<"\nCOOKIE\n"<<request.COOKIE<<endl;
+
+
     response.SetCode(200);
     response.SetFile("index.html");
 }
