@@ -38,6 +38,7 @@ public:
     unordered_map<string, string> HEADER;
     unordered_map<string, string> COOKIE;
     string URI;
+    string RAW_URI;
     string METHOD;
     string PROTOCOL;
 

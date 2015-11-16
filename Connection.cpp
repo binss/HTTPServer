@@ -8,11 +8,11 @@
 #include "Connection.h"
 #include "Mapper.h"
 
-Connection::Connection(int sockfd=0):logger_("Connection", DEBUG, true)
+Connection::Connection(int sockfd, char * host):sockfd_(sockfd), host_(host), logger_("Connection", DEBUG, true)
 {
-    sockfd_ = sockfd;
     recv_length = 0;
     send_length = 0;
+    time_ = time(0);
     pBuffer = request_.GetBuffer();
 }
 
@@ -58,8 +58,20 @@ int Connection::PreSend()
     return ret;
 }
 
+int Connection::End()
+{
+    logger_<<INFO<<host_<<"  \""<<request_.METHOD<<" "<<request_.RAW_URI<<" "<<request_.PROTOCOL<<"\" "<<response_.GetCode()<<" "<<response_.GetContentLength()<<endl;
+    if(!response_.GetKeepAlive())
+    {
+        Close();
+        return -1;
+    }
+    return 0;
+}
+
 int Connection::Reset()
 {
+    time_ = time(0);
     recv_length = 0;
     send_length = 0;
     request_.Reset();
@@ -70,9 +82,8 @@ int Connection::Reset()
 
 int Connection::Close()
 {
-    // 出错处理
+    // 关闭socket
     logger_<<DEBUG<<"Connection["<<sockfd_<<"] closed"<<endl;
-    Reset();
     close(sockfd_);
     return 0;
 }

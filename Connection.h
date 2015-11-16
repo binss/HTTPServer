@@ -17,10 +17,11 @@
 class Connection
 {
 public:
-    Connection(int sockfd);
+    Connection(int sockfd, char * host);
     ~Connection();
     int PreSend();
     int PostRecv();
+    int End();
     int Reset();
     int Close();
 
@@ -33,8 +34,9 @@ private:
     int sockfd_;
     Request request_;
     Response response_;
+    string host_;
+    int time_;
     Logger logger_;
-
 };
 
 #endif

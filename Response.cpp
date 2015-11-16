@@ -31,6 +31,8 @@ inline TO ToType(const TI& input_obj)
 Response::Response():logger_("Response", DEBUG, true)
 {
     compress_ = false;
+    keep_alive_ = false;
+    data_ = NULL;
     cache_ = NULL;
     buffer_ = NULL;
     buffer_length_ = 0;
@@ -59,7 +61,12 @@ int Response::Init(Request &request)
         compress_ = true;
     }
 
-    if(header["Connection"] == "keep-alive")
+
+    if(header["Connection"] == "close")
+    {
+        keep_alive_ = false;
+    }
+    else if(header["Connection"] == "keep-alive" || protocol_ == "HTTP/1.1")
     {
         keep_alive_ = true;
     }
@@ -190,20 +197,32 @@ int Response::BuildHeader()
         {
             header_["Connection"] = "keep-alive";
         }
+
         if(compress_)
         {
-            header_["Content-Length"] = ToType<string, uLong>(cache_->compress_size_);
             header_["Content-Encoding"] = "gzip";
+        }
+
+        if(type_ == 0)
+        {
+            // 立即过期，不缓存
+            header_["Expires"] = "-1";
         }
         else
         {
-            header_["Content-Length"] = ToType<string, uLong>(cache_->size_);
+            header_["Expires"] = GetTime(MAX_AGE);
         }
+
+        header_["Content-Length"] = ToType<string, uLong>(size_);
     }
     else if(protocol_ == "HTTP/1.1")
     {
-        // 对于页面，分chunked发送
-        // TODO：分chucked
+        if(!keep_alive_)
+        {
+            header_["Connection"] = "close";
+        }
+
+        // 对于页面，分chunked发送 TODO：分chucked
         if(type_ == 0)
         {
             header_["Transfer-Encoding"] = "chunked";
@@ -218,12 +237,7 @@ int Response::BuildHeader()
         {
             if(compress_)
             {
-                header_["Content-Length"] = ToType<string, uLong>(cache_->compress_size_);
                 header_["Content-Encoding"] = "gzip";
-            }
-            else
-            {
-                header_["Content-Length"] = ToType<string, uLong>(cache_->size_);
             }
             // 设置cache时间
             if(MAX_AGE > 0)
@@ -241,14 +255,14 @@ int Response::BuildHeader()
                 header_["Content-Length"] = "0";
                 code_ = 304;
             }
-            header_["Etag"] = cache_->etag_;
-        }
+            header_["ETag"] = cache_->etag_;
 
-        // 对于Connection: close的请求，需要在回复后close
+            header_["Content-Length"] = ToType<string, uLong>(size_);
+
+        }
     }
     return 0;
 }
-
 
 int Response::Build()
 {
@@ -261,17 +275,19 @@ int Response::Build()
     if(compress_ && COMPRESS_ON && cache_->compress_size_ > 0 && cache_->compress_data_ != NULL)
     {
         compress_ = true;
+        size_ = cache_->compress_size_;
+        data_ = cache_->compress_data_;
     }
     else
     {
         compress_ = false;
+        size_ = cache_->size_;
+        data_ = cache_->data_;
     }
 
     BuildHeader();
 
-
-
-
+    // 填充header
     string reason = Mapper::GetInstance()->GetReason(code_);
     string protocol = "HTTP/1.1";
     string header_str = protocol + " " + reason + "\r\n";
@@ -289,29 +305,18 @@ int Response::Build()
         return 0;
     }
 
-    uLong size;
-    unsigned char *data;
-    if(compress_)
-    {
-        size = cache_->compress_size_;
-        data = cache_->compress_data_;
-    }
-    else
-    {
-        size = cache_->size_;
-        data = cache_->data_;
-    }
 
+    // 填充data
     if(type_ == 0)
     {
         char content_length[20];
 
-        sprintf(content_length, "%lx\r\n", size);
+        sprintf(content_length, "%lx\r\n", size_);
         memcpy(buffer_ + buffer_length_, content_length, strlen(content_length));
         buffer_length_ += strlen(content_length);
 
-        memcpy(buffer_ + buffer_length_, data, size);
-        buffer_length_ += size;
+        memcpy(buffer_ + buffer_length_, data_, size_);
+        buffer_length_ += size_;
 
 
         char buffer_end[20] = "\r\n0\r\n\r\n";
@@ -320,8 +325,8 @@ int Response::Build()
     }
     else
     {
-        memcpy(buffer_ + buffer_length_, data, size);
-        buffer_length_ += size;
+        memcpy(buffer_ + buffer_length_, data_, size_);
+        buffer_length_ += size_;
     }
     return 0;
 }
@@ -329,6 +334,7 @@ int Response::Build()
 int Response::Reset()
 {
     compress_ = false;
+    keep_alive_ = false;
     type_ = 0;
     code_ = 0;
     target_ = "";
@@ -338,26 +344,9 @@ int Response::Reset()
     return 0;
 }
 
-
-char * Response::GetBuffer()
-{
-    return buffer_;
-}
-
-int Response::GetBufferLength()
-{
-    return buffer_length_;
-}
-
-int Response::GetType()
-{
-    return type_;
-}
-
-string Response::GetTarget()
-{
-    return target_;
-}
+// ------------------------------------------
+// ----------- User interfaces ---------------
+// ------------------------------------------
 
 int Response::SetCookie(const char *name, const char *value, string expires, const char *domain, const char *path, bool secure)
 {

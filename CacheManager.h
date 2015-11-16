@@ -13,6 +13,7 @@
 #include <string>
 #include <unordered_map>
 #include <cstring>
+#include <sys/stat.h>
 
 #include "Logger.h"
 
@@ -29,8 +30,9 @@ public:
         size_ = 0;
         compress_data_ = NULL;
         compress_size_ = 0;
-        etag_ = "1";
+        etag_ = "";
     }
+    void SetETag(string & path);
 
 public:
     int type_;

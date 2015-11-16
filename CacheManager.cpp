@@ -48,6 +48,7 @@ Cache * CacheManager::GetCache(string path, int type)
             logger_<<ERROR<<"Can not find file: "<<path<<endl;
             return NULL;
         }
+        // generate etag
         CleanBuffer();
         int length = fread(buffer_, sizeof(unsigned char), BIG_DATA_SIZE - 1, template_file);
         if(length > 0)
@@ -55,6 +56,7 @@ Cache * CacheManager::GetCache(string path, int type)
             cache = new Cache();
             cache->type_ = type;
             cache->size_ = length;
+            cache->SetETag(path);
             cache->data_ = new unsigned char[length];
             memcpy(cache->data_, buffer_ , length);
             // compressable 只压缩文本(type<20)
@@ -94,11 +96,19 @@ Cache * CacheManager::GetCache(string path, int type)
         logger_<<DEBUG<<"Hit cache: size:"<<cache->size_<<endl;
     }
     return cache;
-
 }
 
 int CacheManager::CleanBuffer()
 {
     memset(buffer_, 0, BIG_DATA_SIZE);
     return 0;
+}
+
+void Cache::SetETag(string & path)
+{
+    struct stat st_buf;
+    stat(path.c_str(), &st_buf);
+    char buf[30];
+    sprintf(buf, "%lx-%lx-%lx", st_buf.st_ino, st_buf.st_size, st_buf.st_mtime);
+    this->etag_ = string(buf);
 }

@@ -31,13 +31,17 @@ public:
     void SetFile(string path);
     void SetCode(int code);
 
-    char * GetBuffer();
-    int GetBufferLength();
-    int GetType();
-    string GetTarget();
+    char * GetBuffer() { return buffer_; }
+    int GetBufferLength() { return buffer_length_; }
+    int GetType() { return type_; }
+    bool GetKeepAlive() { return keep_alive_; }
+    string GetTarget() { return target_; }
+    int GetCode() { return code_; }
+    int GetContentLength() { return size_; }
 
 private:
     int UriDecode(string uri);
+
 
 private:
     unordered_map<string, string> header_;
@@ -47,14 +51,18 @@ private:
 
     int code_;
     int type_;
+    uLong size_;
+    unsigned char * data_;
+    string target_;
+    bool compress_;
+    bool keep_alive_;
+
     char * buffer_;
     int buffer_length_;
     int buffer_size_;
-    string target_;
+
     Cache *cache_;
     Logger logger_;
-    bool compress_;
-    bool keep_alive_;
 };
 
 #endif

@@ -68,10 +68,11 @@ int Request::Parse(int length)
             return -2;
         }
         METHOD = metas[0];
+        RAW_URI = metas[1];
         PROTOCOL = metas[2];
 
         // decode uri
-        vector<string> uri_tokens = split(metas[1], "?");
+        vector<string> uri_tokens = split(RAW_URI, "?");
         switch(uri_tokens.size())
         {
             case 2:
@@ -133,9 +134,6 @@ int Request::Parse(int length)
         }
         data_ = parts[1];
     }
-
-    // TODO
-    // 处理If-Modified-Since -返回304
 
     return 0;
 }

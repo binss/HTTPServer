@@ -33,10 +33,17 @@ int HandleHttpRequest(int epfd, int sockfd)
     }
     else
     {
-        // 没找到，新建
-        pConnection = new Connection(sockfd);
-        connections[sockfd] = pConnection;
+        // 没找到
+        logger<<ERROR<<"Can not find sockfd["<<sockfd<<"]"<<endl;
+        close(sockfd);
+        ret = epoll_ctl(epfd, EPOLL_CTL_DEL, sockfd, NULL);
+        if(ret != 0)
+        {
+            printf("[HandleHttpResponse]epoll_ctl error, ret: %d, errno: %d\n", ret, errno);
+        }
+        return -1;
     }
+
     char* pBuffer = pConnection->pBuffer;
     while(true)
     {
@@ -113,16 +120,24 @@ int HandleHttpResponse(int epfd, int sockfd)
     }
 
     logger<<VERBOSE<<"HandleHttpResponse: length: "<<pConnection->send_length<<" fd: "<<sockfd<<endl;
-    // close(sockfd);
 
-    struct epoll_event event;
-    event.data.fd = sockfd;
-    event.events = EPOLLIN | EPOLLERR;
-    int ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
-    if(ret != 0)
+    if(pConnection->End())
     {
-        logger<<ERROR<<"HandleHttpResponse: epoll_ctl error, ret: "<<ret<<" errno: "<<errno<<endl;
+        connections.erase(sockfd);
+        delete pConnection;
     }
+    else
+    {
+        struct epoll_event event;
+        event.data.fd = sockfd;
+        event.events = EPOLLIN | EPOLLERR;
+        int ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
+        if(ret != 0)
+        {
+            logger<<ERROR<<"HandleHttpResponse: epoll_ctl error, ret: "<<ret<<" errno: "<<errno<<endl;
+        }
+    }
+
     return 0;
 }
 
@@ -150,8 +165,8 @@ int HandleNewRequest(int listenfd)
     {
         struct sockaddr_in cliaddr;
         socklen_t clilen = sizeof(cliaddr);
-        int connfd = accept(listenfd, (sockaddr *) &cliaddr, &clilen);
-        if(connfd == -1)
+        int sockfd = accept(listenfd, (sockaddr *) &cliaddr, &clilen);
+        if(sockfd == -1)
         {
             if ( (errno == EAGAIN) || (errno == EWOULDBLOCK) )
             {
@@ -165,23 +180,25 @@ int HandleNewRequest(int listenfd)
                 }
             break;
         }
-        SetNonblocking(connfd);
+        SetNonblocking(sockfd);
 
         int on = 1;
         // 停用Nagle算法
-        setsockopt(connfd, SOL_TCP, TCP_CORK, &on, sizeof(on));
+        setsockopt(sockfd, SOL_TCP, TCP_CORK, &on, sizeof(on));
 
-        char dest[30];
-        inet_ntop(AF_INET, &cliaddr.sin_addr, dest, 30);
+        char host[30];
+        inet_ntop(AF_INET, &cliaddr.sin_addr, host, 30);
 
-        logger<<DEBUG<<"HandleNewRequest: new socket: "<<dest<<", port: "<<ntohs(cliaddr.sin_port)<<" fd: "<<connfd<<endl;
+        logger<<DEBUG<<"HandleNewRequest: new socket: "<<host<<", port: "<<ntohs(cliaddr.sin_port)<<" fd: "<<sockfd<<endl;
 
-        // 接受连接
-        struct epoll_event event;
-        event.data.fd = connfd;
-        event.events = EPOLLIN | EPOLLET;
+        // 为socket建立connection
+        connections[sockfd] = new Connection(sockfd, host);
+
         // 把新连接的描述符也加入epoll
-        int ret = epoll_ctl(epfd, EPOLL_CTL_ADD, connfd, &event);
+        struct epoll_event event;
+        event.data.fd = sockfd;
+        event.events = EPOLLIN | EPOLLET;
+        int ret = epoll_ctl(epfd, EPOLL_CTL_ADD, sockfd, &event);
         if ( ret != 0 )
         {
             // == -1
@@ -193,7 +210,7 @@ int HandleNewRequest(int listenfd)
 
 }
 
-void sighandler ( int sig )
+void sighandler(int sig)
 {
     close(listenfd);
     for(unordered_map<int, Connection *>::iterator iter = connections.begin(); iter != connections.end(); ++iter)
@@ -204,8 +221,6 @@ void sighandler ( int sig )
     logger<<INFO<<"Http Server closed"<<endl;
     exit(0);
 }
-
-
 
 
 int main()
@@ -232,16 +247,16 @@ int main()
     int ret = bind(listenfd, (sockaddr *) &servaddr, sizeof(servaddr));
     if(ret == -1)
     {
-        logger<<CRITICAL<<"bind error, errno:"<<errno<<endl;
+        logger<<CRITICAL<<"Bind error, errno:"<<errno<<endl;
     }
     // 开始监听
     if(listen(listenfd, LISTENQ))
     {
-        logger<<CRITICAL<<"listen error, errno:"<<errno<<endl;
+        logger<<CRITICAL<<"Listen error, errno:"<<errno<<endl;
         return -1;
     }
 
-    logger<<INFO<<"listening:"<<INADDR_ANY<<":"<<SERV_PORT<<endl;
+    logger<<INFO<<"Listening:"<<INADDR_ANY<<":"<<SERV_PORT<<endl;
 
     // 创建epoll
     epfd = epoll_create(EPOLL_SIZE);
@@ -251,7 +266,7 @@ int main()
     // 把监听描述符绑定到epoll上
     if(epoll_ctl(epfd, EPOLL_CTL_ADD, listenfd, &event))
     {
-        logger<<CRITICAL<<"epoll add fd error, errno:"<<errno<<endl;
+        logger<<CRITICAL<<"Epoll add fd error, errno:"<<errno<<endl;
         return -2;
     }
     for( ; ; )
@@ -264,7 +279,7 @@ int main()
             // 出错
             if ( (events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP) )
             {
-                logger<<ERROR<<"epoll error"<<endl;
+                logger<<ERROR<<"Epoll error"<<endl;
                 close(events[i].data.fd);
                 continue;
             }
@@ -277,7 +292,7 @@ int main()
             }
             else
             {
-                logger<<VERBOSE<<"socket wake: fd:"<<events[i].data.fd<<" event: "<<events[i].events<<endl;
+                logger<<VERBOSE<<"Socket wake: fd:"<<events[i].data.fd<<" event: "<<events[i].events<<endl;
                 // 如果是和client连接的描述符
                 if(events[i].events & EPOLLIN)
                 {
