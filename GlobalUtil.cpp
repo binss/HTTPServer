@@ -74,7 +74,7 @@ int Compress(unsigned char *dest, uLong & dest_len, unsigned char *src, uLong sr
     }
 }
 
-vector<string> split(const string& s, const string& delim, const bool keep_empty)
+vector<string> Split(const string& s, const string& delim, const bool keep_empty)
 {
     vector<string> result;
     if (delim.empty())
@@ -98,4 +98,38 @@ vector<string> split(const string& s, const string& delim, const bool keep_empty
         substart = subend + delim.size();
     }
     return result;
+}
+
+char * SplitBuffer(char * buffer, int & buffer_length, char * delim, int delim_length)
+{
+    if(buffer == NULL || delim == NULL || buffer_length <= 0 || delim_length <= 0)
+    {
+        return NULL;
+    }
+    bool match = false;
+    char * end = buffer + buffer_length;
+    while(buffer < end)
+    {
+        if(*buffer != delim[0])
+        {
+            buffer++;
+        }
+        else
+        {
+            if( memcmp((void *)(buffer), delim, delim_length) == 0 )
+            {
+                memset((void *)(buffer), 0, delim_length);
+                match = true;
+                break;
+            }
+            buffer += delim_length;
+        }
+    }
+    if(!match)
+    {
+        return NULL;
+    }
+    char * new_buffer = buffer + delim_length;
+    buffer_length = end - new_buffer;
+    return new_buffer;
 }

@@ -32,6 +32,7 @@ Response::Response():logger_("Response", DEBUG, true)
 {
     compress_ = false;
     keep_alive_ = false;
+    raw_ = NULL;
     data_ = NULL;
     buffer_ = NULL;
     buffer_length_ = 0;
@@ -51,8 +52,6 @@ Response::~Response()
 
 int Response::Init(Request &request)
 {
-    UriDecode(request.URI);
-
     unordered_map<string, string> & header = request.HEADER;
     method_ = request.METHOD;
     protocol_ = request.PROTOCOL;
@@ -74,56 +73,10 @@ int Response::Init(Request &request)
 
     etag_ = header["If-None-Match"];
 
+    UriDecode(request.URI);
+
     // 接收范围请求
     // header_["Accept-Ranges"] = "bytes";
-    if(type_ > 0)
-    {
-        SetFile(target_);
-    }
-    return 0;
-}
-
-int Response::UriDecode(string uri)
-{
-    string file_type = "default";
-    if(uri != "")
-    {
-        if(uri.find("..") == string::npos)
-        {
-
-            if(uri.length() > 4)
-            {
-                file_type = uri.substr(uri.length() - 3);
-                type_ = Mapper::GetInstance()->GetContentType(file_type);
-                Cache *cache = CacheManager::GetInstance()->GetCache(uri, type_);
-                if(NULL == cache)
-                {
-                    type_ = 0;
-                    target_ = "/404/";
-                }
-                else
-                {
-                    target_ = uri;
-                }
-            }
-            else
-            {
-                type_ = 0;
-                target_ = uri;
-            }
-
-
-        }
-        else
-        {
-            // 禁止.. 防止目录外文件被返回 直接返回403
-            target_ = "/403/";
-        }
-    }
-    else
-    {
-        target_ = "/404/";
-    }
 
     // 分配内存
     if(type_ < 20)
@@ -143,7 +96,51 @@ int Response::UriDecode(string uri)
             buffer_size_ = BIG_BUFFER_SIZE;
         }
     }
+    return 0;
+}
 
+int Response::UriDecode(string uri)
+{
+    string file_type = "default";
+    if(uri != "")
+    {
+        if(uri.find("..") == string::npos)
+        {
+
+            if(uri.length() > 4)
+            {
+                file_type = uri.substr(uri.length() - 3);
+                type_ = Mapper::GetInstance()->GetContentType(file_type);
+                if(type_ > 0)
+                {
+                    // 请求资源
+                    if( LoadCache(uri, type_) != 0 )
+                    {
+                        type_ = 0;
+                        target_ = "/404/";
+                    }
+                }
+                else
+                {
+                    // 请求view
+                    target_ = uri;
+                }
+            }
+            else
+            {
+                target_ = uri;
+            }
+        }
+        else
+        {
+            // 禁止.. 防止目录外文件被返回 直接返回403
+            target_ = "/403/";
+        }
+    }
+    else
+    {
+        target_ = "/404/";
+    }
 
     logger_<<DEBUG<<"URI: "<<uri<<" target: "<<target_<<" File type: "<<file_type<<"["<<type_<<"]"<<endl;
 
@@ -154,8 +151,6 @@ int Response::BuildHeader()
 {
     header_["Server"] = "Dudu Server/0.1";
     header_["Date"] = GetTime(0);
-    // 失效时间
-    // header_["Expires"] = GetTime(EXPIRES_TIME);
 
     switch(type_)
     {
@@ -207,7 +202,7 @@ int Response::BuildHeader()
             header_["Content-Encoding"] = "gzip";
         }
 
-        if(type_ == 0)
+        if(type_ == 1)
         {
             // 立即过期，不缓存
             header_["Expires"] = "-1";
@@ -227,7 +222,7 @@ int Response::BuildHeader()
         }
 
         // 对于页面，分chunked发送 TODO：分chucked
-        if(type_ == 0)
+        if(type_ == 1)
         {
             header_["Transfer-Encoding"] = "chunked";
             if(compress_)
@@ -254,13 +249,15 @@ int Response::BuildHeader()
             }
 
             // 判断etag
-            if(etag_ == header_["ETag"])
+            if(etag_ != "" && etag_ == header_["ETag"])
             {
                 header_["Content-Length"] = "0";
                 code_ = 304;
             }
-
-            header_["Content-Length"] = ToType<string, uLong>(size_);
+            else
+            {
+                header_["Content-Length"] = ToType<string, uLong>(size_);
+            }
 
         }
     }
@@ -277,6 +274,13 @@ int Response::Build()
         keep_alive_ = false;
     }
 
+    if( 0 == type_ )
+    {
+        logger_<<WARNING<<"The type should be set!"<<endl;
+        code_ = 500;
+        keep_alive_ = false;
+    }
+
     if(NULL == data_)
     {
         logger_<<WARNING<<"The response data should be set!"<<endl;
@@ -286,7 +290,6 @@ int Response::Build()
     else
     {
         BuildHeader();
-
     }
 
 
@@ -310,7 +313,7 @@ int Response::Build()
 
 
     // 填充data
-    if(type_ == 0)
+    if(type_ == 1)
     {
         char content_length[20];
 
@@ -331,7 +334,6 @@ int Response::Build()
         memcpy(buffer_ + buffer_length_, data_, size_);
         buffer_length_ += size_;
     }
-    cout<<buffer_<<endl;
     return 0;
 }
 
@@ -345,6 +347,34 @@ int Response::Reset()
     header_.clear();
     buffer_length_ = 0;
     memset(buffer_, 0, buffer_size_);
+    return 0;
+}
+
+
+int Response::LoadCache(string & path, int type)
+{
+    Cache * cache = CacheManager::GetInstance()->GetCache(path, type);
+    if(NULL == cache)
+    {
+        logger_<<ERROR<<"Get cache instance error!"<<endl;
+        return -1;
+    }
+    else
+    {
+        if(COMPRESS_ON && compress_ && cache->compress_size_ > 0 && cache->compress_data_ != NULL)
+        {
+            compress_ = true;
+            size_ = cache->compress_size_;
+            data_ = cache->compress_data_;
+        }
+        else
+        {
+            compress_ = false;
+            size_ = cache->size_;
+            data_ = cache->data_;
+        }
+        header_["ETag"] = cache->etag_;
+    }
     return 0;
 }
 
@@ -379,33 +409,30 @@ int Response::SetCookie(const char *name, const char *value, string expires, con
 
 void Response::SetFile(string path)
 {
-    path = "/" + path;
-    Cache * cache = CacheManager::GetInstance()->GetCache(path, type_);
-    if(NULL == cache)
+    if(path.length() > 4)
     {
-        logger_<<ERROR<<"Get cache instance error!"<<endl;
-    }
-    else
-    {
-        if(COMPRESS_ON && compress_ && cache->compress_size_ > 0 && cache->compress_data_ != NULL)
+        path = "/" + path;
+        string file_type = path.substr(path.length() - 3);
+        type_ = Mapper::GetInstance()->GetContentType(file_type);
+        if(type_ > 0)
         {
-            compress_ = true;
-            size_ = cache->compress_size_;
-            data_ = cache->compress_data_;
+            LoadCache(path, type_);
         }
         else
         {
-            compress_ = false;
-            size_ = cache->size_;
-            data_ = cache->data_;
+            logger_<<ERROR<<"SetFile failed. Can not recognize type["<<file_type<<"]"<<endl;
         }
-        header_["ETag"] = cache->etag_;
+    }
+    else
+    {
+        logger_<<ERROR<<"SetFile failed. path["<<path<<"] error"<<endl;
     }
 }
 
 void Response::SetRawString(string str)
 {
     compress_ = false;
+    type_ = 1;
     size_ = str.size();
     raw_ = new unsigned char[size_];
     memcpy(raw_, str.c_str() , size_);

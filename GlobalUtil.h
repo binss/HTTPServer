@@ -16,6 +16,7 @@
 #include <zlib.h>
 #include <vector>
 #include <algorithm>
+#include <cstring>
 
 using namespace std;
 
@@ -23,6 +24,7 @@ string GetTime(int offset);
 string GetCurFormatTime(string format);
 void EnsureDirectory(const char * path);
 int Compress(unsigned char *dest, uLong & dest_len, unsigned char *src, uLong src_len, int level);
-vector<string> split(const string& s, const string& delim, const bool keep_empty = true);
+vector<string> Split(const string& s, const string& delim, const bool keep_empty = true);
+char * SplitBuffer(char * buffer, int & buffer_length, char * delim, int delim_length);
 
 #endif

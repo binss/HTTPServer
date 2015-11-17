@@ -44,6 +44,7 @@ public:
 
 private:
     int UriDecode(string uri);
+    int LoadCache(string & path, int type);
 
 
 private:
@@ -65,7 +66,6 @@ private:
     int buffer_size_;
 
     unsigned char *raw_;
-    Cache *cache_;
     Logger logger_;
 };
 

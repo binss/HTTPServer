@@ -45,7 +45,7 @@ public:
 
 private:
     char * buffer_;
-    string data_;
+    char * data_;
     Logger logger_;
 };
 

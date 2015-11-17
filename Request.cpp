@@ -42,28 +42,26 @@ int Request::Parse(int length)
         logger_<<ERROR<<"Request error!"<<endl;
         return -1;
     }
-    string raw_buffer(buffer_);
-    // 先切出header和data
-    regex part_reg("([\\s\\S]+?)\r\n\r\n([\\s\\S]+)?");
-    smatch parts;
-    regex_match(raw_buffer, parts, part_reg);
-    logger_<<WARNING<<parts.size()<<endl;
-    logger_<<WARNING<<raw_buffer<<endl;
-    if(parts.size() != 3)
+
+    int data_length = length;
+    char delim[] = "\r\n\r\n";
+    data_ = SplitBuffer(buffer_, data_length, delim, strlen(delim));
+    if(data_ == NULL)
     {
-        logger_<<ERROR<<"Part decode error! lenght:"<<parts.size()<<endl;
+        logger_<<ERROR<<"Part decode error! buffer:"<<buffer_<<endl;
         return -2;
     }
+    string header(buffer_);
     // 解析header
-    vector<string> lines = split(parts[1], "\r\n");
+    vector<string> lines = Split(header, "\r\n");
     if(lines.size() <= 0)
     {
-        logger_<<ERROR<<"Header decode error! header:"<<parts[0]<<endl;
+        logger_<<ERROR<<"Header decode error! header:"<<header<<endl;
         return -3;
     }
     // 对于第一行作特殊处理
     {
-        vector<string> metas = split(lines[0], " ");
+        vector<string> metas = Split(lines[0], " ");
         if(metas.size() != 3)
         {
             logger_<<ERROR<<"Header meta decode error! meta:"<<lines[0]<<endl;
@@ -74,15 +72,15 @@ int Request::Parse(int length)
         PROTOCOL = metas[2];
 
         // decode uri
-        vector<string> uri_tokens = split(RAW_URI, "?");
+        vector<string> uri_tokens = Split(RAW_URI, "?");
         switch(uri_tokens.size())
         {
             case 2:
             {
-                vector<string> paras = split(uri_tokens[1], "&");
+                vector<string> paras = Split(uri_tokens[1], "&");
                 for(unsigned int i=0; i<paras.size(); i++)
                 {
-                    vector<string> token = split(paras[i], "=");
+                    vector<string> token = Split(paras[i], "=");
                     if(token.size() == 2)
                     {
                         GET[token[0]] = token[1];
@@ -130,12 +128,11 @@ int Request::Parse(int length)
 
     if(METHOD == "POST")
     {
-        data_ = parts[2].str();
         if(HEADER["Content-Length"] != "")
         {
-            if(parts[2].length() != ToType<unsigned int, string>(HEADER["Content-Length"]))
+            if(data_length != ToType<int, string>(HEADER["Content-Length"]))
             {
-                logger_<<WARNING<<"The length of data["<<data_.length()<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
+                logger_<<WARNING<<"The length of data["<<data_length<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
             }
         }
 
@@ -144,13 +141,12 @@ int Request::Parse(int length)
             DecodeData(data_);
         }
     }
-    cout<<data_<<endl;
     return 0;
 }
 
 int Request::DecodeCookie(string cookie_str)
 {
-    vector<string> cookies = split(cookie_str, ";");
+    vector<string> cookies = Split(cookie_str, ";");
     regex reg(" *(.+)= *(.+)");
     smatch token;
     for(unsigned int i=0; i<cookies.size(); i++)
@@ -173,13 +169,12 @@ int Request::DecodeData(string data)
 {
     // application/x-www-form-urlencoded
     // multipart/form-data; boundary=----WebKitFormBoundaryoUZxy8WfgYJUqTaA
-
     if(HEADER["Content-Type"] == "application/x-www-form-urlencoded")
     {
-        vector<string> paras = split(data, "&");
+        vector<string> paras = Split(data, "&");
         for(unsigned int i=0; i<paras.size(); i++)
         {
-            vector<string> token = split(paras[i], "=");
+            vector<string> token = Split(paras[i], "=");
             if(token.size() == 2)
             {
                 POST[token[0]] = token[1];
@@ -213,8 +208,7 @@ int Request::DecodeData(string data)
             }
         }
     }
-    logger_<<ERROR<<POST<<endl;
-
+    // logger_<<ERROR<<"POST "<<POST<<endl;
     // logger_<<WARNING<<HEADER["Content-Type"]<<endl;
 
     return 0;
@@ -223,7 +217,7 @@ int Request::DecodeData(string data)
 
 int Request::Reset()
 {
-    data_.clear();
+    // data_.clear();
     HEADER.clear();
     GET.clear();
     POST.clear();

@@ -30,7 +30,7 @@ void Mapper::InitContentTypeMap()
 {
     // 0 - 9 chucked
     content_type_map_[""] = 0;
-    content_type_map_["tml"] = 0;
+    content_type_map_["tml"] = 1;
     // 10 - 19 fixed-length text file
     content_type_map_[".js"] = 10;
     content_type_map_["css"] = 11;

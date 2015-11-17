@@ -22,6 +22,7 @@ void main_page(Request &request, Response &response)
     {
         LOG<<DEBUG<<request.POST["name"]<<endl;
         response.SetCode(200);
+
         response.SetRawString("OK");
         // response.SetFile("index.html");
 

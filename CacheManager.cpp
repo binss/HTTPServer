@@ -33,7 +33,7 @@ Cache * CacheManager::GetCache(string path, int type)
     if(NULL == cache)
     {
         // cache miss
-        if(type == 0)
+        if(type == 1)
         {
             path = TEMPLATES_DIR + path;
         }
