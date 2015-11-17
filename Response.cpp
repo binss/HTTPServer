@@ -33,7 +33,6 @@ Response::Response():logger_("Response", DEBUG, true)
     compress_ = false;
     keep_alive_ = false;
     data_ = NULL;
-    cache_ = NULL;
     buffer_ = NULL;
     buffer_length_ = 0;
     buffer_size_ = 0;
@@ -45,6 +44,8 @@ Response::~Response()
 {
     delete [] buffer_;
     buffer_ = NULL;
+    delete [] raw_;
+    raw_ = NULL;
     header_.clear();
 }
 
@@ -75,7 +76,10 @@ int Response::Init(Request &request)
 
     // 接收范围请求
     // header_["Accept-Ranges"] = "bytes";
-
+    if(type_ > 0)
+    {
+        SetFile(target_);
+    }
     return 0;
 }
 
@@ -91,8 +95,8 @@ int Response::UriDecode(string uri)
             {
                 file_type = uri.substr(uri.length() - 3);
                 type_ = Mapper::GetInstance()->GetContentType(file_type);
-                cache_ = CacheManager::GetInstance()->GetCache(uri, type_);
-                if( NULL == cache_)
+                Cache *cache = CacheManager::GetInstance()->GetCache(uri, type_);
+                if(NULL == cache)
                 {
                     type_ = 0;
                     target_ = "/404/";
@@ -187,7 +191,7 @@ int Response::BuildHeader()
         default:
         {
             logger_<<ERROR<<"Can not recognize type["<<type_<<"], set to default type[0]"<<endl;
-            header_["Content-Type"] = "text/html";
+            header_["Content-Type"] = "text/html; charset=UTF-8";
         }
     }
 
@@ -250,17 +254,17 @@ int Response::BuildHeader()
             }
 
             // 判断etag
-            if(etag_ == cache_->etag_)
+            if(etag_ == header_["ETag"])
             {
                 header_["Content-Length"] = "0";
                 code_ = 304;
             }
-            header_["ETag"] = cache_->etag_;
 
             header_["Content-Length"] = ToType<string, uLong>(size_);
 
         }
     }
+
     return 0;
 }
 
@@ -268,24 +272,23 @@ int Response::Build()
 {
     if( 0 == code_ )
     {
-        logger_<<ERROR<<"The response code should be set!"<<endl;
-        return -1;
+        logger_<<WARNING<<"The response code should be set!"<<endl;
+        code_ = 500;
+        keep_alive_ = false;
     }
 
-    if(compress_ && COMPRESS_ON && cache_->compress_size_ > 0 && cache_->compress_data_ != NULL)
+    if(NULL == data_)
     {
-        compress_ = true;
-        size_ = cache_->compress_size_;
-        data_ = cache_->compress_data_;
+        logger_<<WARNING<<"The response data should be set!"<<endl;
+        code_ = 500;
+        keep_alive_ = false;
     }
     else
     {
-        compress_ = false;
-        size_ = cache_->size_;
-        data_ = cache_->data_;
+        BuildHeader();
+
     }
 
-    BuildHeader();
 
     // 填充header
     string reason = Mapper::GetInstance()->GetReason(code_);
@@ -300,7 +303,7 @@ int Response::Build()
     memcpy(buffer_, header_str.c_str(), header_str.length());
     buffer_length_ += header_str.length();
 
-    if(code_ == 304)
+    if(code_ == 304 || code_ == 500)
     {
         return 0;
     }
@@ -328,6 +331,7 @@ int Response::Build()
         memcpy(buffer_ + buffer_length_, data_, size_);
         buffer_length_ += size_;
     }
+    cout<<buffer_<<endl;
     return 0;
 }
 
@@ -376,12 +380,38 @@ int Response::SetCookie(const char *name, const char *value, string expires, con
 void Response::SetFile(string path)
 {
     path = "/" + path;
-    cache_ = CacheManager::GetInstance()->GetCache(path, type_);
-    if(NULL == cache_)
+    Cache * cache = CacheManager::GetInstance()->GetCache(path, type_);
+    if(NULL == cache)
     {
         logger_<<ERROR<<"Get cache instance error!"<<endl;
     }
+    else
+    {
+        if(COMPRESS_ON && compress_ && cache->compress_size_ > 0 && cache->compress_data_ != NULL)
+        {
+            compress_ = true;
+            size_ = cache->compress_size_;
+            data_ = cache->compress_data_;
+        }
+        else
+        {
+            compress_ = false;
+            size_ = cache->size_;
+            data_ = cache->data_;
+        }
+        header_["ETag"] = cache->etag_;
+    }
 }
+
+void Response::SetRawString(string str)
+{
+    compress_ = false;
+    size_ = str.size();
+    raw_ = new unsigned char[size_];
+    memcpy(raw_, str.c_str() , size_);
+    data_ = raw_;
+}
+
 
 void Response::SetCode(int code)
 {

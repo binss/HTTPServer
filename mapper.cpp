@@ -49,6 +49,7 @@ void Mapper::InitReasonMap()
     reason_map_[304] = "304 Not Modified";
     reason_map_[403] = "403 Forbidden";
     reason_map_[404] = "404 Not Found";
+    reason_map_[500] = "500 Internal Server Error";
 
 }
 

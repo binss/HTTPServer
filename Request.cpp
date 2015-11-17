@@ -42,18 +42,20 @@ int Request::Parse(int length)
         logger_<<ERROR<<"Request error!"<<endl;
         return -1;
     }
-    string str(buffer_);
-
+    string raw_buffer(buffer_);
     // 先切出header和data
-    vector<string> parts = split(str, "\r\n\r\n");
-
-    if(parts.size() != 2)
+    regex part_reg("([\\s\\S]+?)\r\n\r\n([\\s\\S]+)?");
+    smatch parts;
+    regex_match(raw_buffer, parts, part_reg);
+    logger_<<WARNING<<parts.size()<<endl;
+    logger_<<WARNING<<raw_buffer<<endl;
+    if(parts.size() != 3)
     {
         logger_<<ERROR<<"Part decode error! lenght:"<<parts.size()<<endl;
         return -2;
     }
     // 解析header
-    vector<string> lines = split(parts[0], "\r\n");
+    vector<string> lines = split(parts[1], "\r\n");
     if(lines.size() <= 0)
     {
         logger_<<ERROR<<"Header decode error! header:"<<parts[0]<<endl;
@@ -126,15 +128,23 @@ int Request::Parse(int length)
         }
     }
 
-    if(METHOD == "POST" && HEADER.find("Content-Length") != HEADER.end())
+    if(METHOD == "POST")
     {
-        if(parts[1].length() != ToType<unsigned int, string>(HEADER["Content-Length"]))
+        data_ = parts[2].str();
+        if(HEADER["Content-Length"] != "")
         {
-            logger_<<WARNING<<"The length of data["<<parts[1].length()<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
+            if(parts[2].length() != ToType<unsigned int, string>(HEADER["Content-Length"]))
+            {
+                logger_<<WARNING<<"The length of data["<<data_.length()<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
+            }
         }
-        data_ = parts[1];
-    }
 
+        if(HEADER["Content-Type"] != "")
+        {
+            DecodeData(data_);
+        }
+    }
+    cout<<data_<<endl;
     return 0;
 }
 
@@ -158,6 +168,58 @@ int Request::DecodeCookie(string cookie_str)
     }
     return 0;
 }
+
+int Request::DecodeData(string data)
+{
+    // application/x-www-form-urlencoded
+    // multipart/form-data; boundary=----WebKitFormBoundaryoUZxy8WfgYJUqTaA
+
+    if(HEADER["Content-Type"] == "application/x-www-form-urlencoded")
+    {
+        vector<string> paras = split(data, "&");
+        for(unsigned int i=0; i<paras.size(); i++)
+        {
+            vector<string> token = split(paras[i], "=");
+            if(token.size() == 2)
+            {
+                POST[token[0]] = token[1];
+            }
+            else
+            {
+                logger_<<ERROR<<"Data token decode error! token:"<<paras[i]<<endl;
+            }
+        }
+    }
+    // else if...
+    else
+    {
+        regex reg("(.+); *boundary=(.+)");
+        smatch token;
+        if(regex_match(HEADER["Content-Type"], token, reg))
+        {
+            if(token[1] == "multipart/form-data")
+            {
+                // Chrome && Safari
+                string data_reg_str = "-*" + token[2].str() + "\r\nContent-Disposition: (.*); name=\"(.*)\"\r\n\r\n(.*)";
+                regex data_reg(data_reg_str);
+                for(sregex_iterator iter(data.cbegin(), data.cend(), data_reg), end; iter != end; ++iter)
+                {
+                    if(iter->format("$1") == "form-data")
+                    {
+                        POST[iter->format("$2")] = iter->format("$3");
+                    }
+                    // logger_<<DEBUG<<"type["<<iter->format("$1")<<"] ["<<iter->format("$2")<<"]=["<<iter->format("$3")<<"]"<<endl;
+                }
+            }
+        }
+    }
+    logger_<<ERROR<<POST<<endl;
+
+    // logger_<<WARNING<<HEADER["Content-Type"]<<endl;
+
+    return 0;
+}
+
 
 int Request::Reset()
 {

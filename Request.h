@@ -31,6 +31,7 @@ public:
 
 private:
     int DecodeCookie(string cookie_str);
+    int DecodeData(string data);
 
 public:
     unordered_map<string, string> GET;

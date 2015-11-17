@@ -30,6 +30,9 @@ public:
     int SetCookie(const char *name, const char *value, string expires, const char *domain=NULL, const char *path=NULL, bool secure=false);
     void SetFile(string path);
     void SetCode(int code);
+    void SetRawString(string str);
+
+
 
     char * GetBuffer() { return buffer_; }
     int GetBufferLength() { return buffer_length_; }
@@ -61,6 +64,7 @@ private:
     int buffer_length_;
     int buffer_size_;
 
+    unsigned char *raw_;
     Cache *cache_;
     Logger logger_;
 };

@@ -11,15 +11,26 @@ Logger LOG("View", DEBUG, true);
 
 void main_page(Request &request, Response &response)
 {
-    response.SetCookie("username", "binss", GetTime(60000));
-    response.SetCookie("email", "i@binss.me", GetTime(60000));
+    if(request.METHOD == "GET")
+    {
+        response.SetCookie("username", "binss", GetTime(60000));
+        response.SetCookie("email", "i@binss.me", GetTime(60000));
+        response.SetCode(200);
+        response.SetFile("index.html");
+    }
+    else if(request.METHOD == "POST")
+    {
+        LOG<<DEBUG<<request.POST["name"]<<endl;
+        response.SetCode(200);
+        response.SetRawString("OK");
+        // response.SetFile("index.html");
 
-    LOG<<DEBUG<<"\nGET\n"<<request.GET<<endl;
-    LOG<<DEBUG<<"\nCOOKIE\n"<<request.COOKIE<<endl;
+    }
+    // LOG<<DEBUG<<"\nGET\n"<<request.GET<<endl;
+    // LOG<<DEBUG<<"\nCOOKIE\n"<<request.COOKIE<<endl;
 
 
-    response.SetCode(200);
-    response.SetFile("index.html");
+
 }
 
 void error_404(Request &request, Response &response)
@@ -33,3 +44,4 @@ void error_403(Request &request, Response &response)
     response.SetCode(403);
     response.SetFile("error/403.html");
 }
+
