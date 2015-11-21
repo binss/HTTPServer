@@ -14,6 +14,7 @@ Connection::Connection(int sockfd, char * host):sockfd_(sockfd), host_(host), lo
     send_length = 0;
     time_ = time(0);
     pBuffer = request_.GetBuffer();
+    pending = false;
 }
 
 Connection::~Connection()
@@ -23,7 +24,20 @@ Connection::~Connection()
 
 int Connection::PostRecv()
 {
-    return request_.Parse(recv_length);
+    int ret;
+    if(pending)
+    {
+        ret = request_.Append(recv_length);
+    }
+    else
+    {
+        ret = request_.Parse(recv_length);
+    }
+    if(ret == -100)
+    {
+        pending = true;
+    }
+    return ret;
 }
 
 int Connection::PreSend()
@@ -61,6 +75,7 @@ int Connection::PreSend()
 int Connection::End()
 {
     logger_<<INFO<<host_<<"  \""<<request_.METHOD<<" "<<request_.RAW_URI<<" "<<request_.PROTOCOL<<"\" "<<response_.GetCode()<<" "<<response_.GetContentLength()<<endl;
+    pending = false;
     if(!response_.GetKeepAlive())
     {
         Close();
@@ -88,3 +103,18 @@ int Connection::Close()
     return 0;
 }
 
+int Connection::AddRecvLength(int length)
+{
+    int recv_buffer_size_ = request_.GetBufferSize();
+    if(recv_length + length >= recv_buffer_size_)
+    {
+        recv_buffer_size_ = recv_buffer_size_ * 2;
+        pBuffer = request_.EnlargeBuffer(recv_buffer_size_);
+        if(NULL == pBuffer)
+        {
+            return -1;
+        }
+    }
+    recv_length += length;
+    return 0;
+}

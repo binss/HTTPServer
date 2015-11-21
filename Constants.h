@@ -13,7 +13,7 @@
 #define LISTENQ 1024    /* 2nd argument to listen() */
 #define EPOLL_SIZE 1024
 #define EPOLL_TIMEOUT 500
-#define REQUEST_BUFFER_SIZE 1024
+#define REQUEST_DEFAULT_BUFFER_SIZE 1024
 
 #define NORMAL_BUFFER_SIZE 1024 * 1024 + 2048
 #define BIG_BUFFER_SIZE 1024 * 1024 * 10 + 2048
@@ -24,6 +24,7 @@
 
 #define TEMPLATES_DIR "/home/binss/HTTPServer/templates"
 #define RESOURCES_DIR "/home/binss/HTTPServer/resources"
+#define UPLOAD_DIR "/home/binss/HTTPServer/upload"
 
 #define COMPRESS_ON true
 #define COMPRESS_LEVEL 9

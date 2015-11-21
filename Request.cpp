@@ -26,7 +26,11 @@ inline TO ToType(const TI& input_obj)
 
 Request::Request():logger_("Request", DEBUG, true)
 {
-    buffer_ = new char[REQUEST_BUFFER_SIZE];
+    header_length_ = 0;
+    buffer_size_ = REQUEST_DEFAULT_BUFFER_SIZE;
+    buffer_length_ = 0;
+    buffer_ = new char[buffer_size_];
+    data_ = NULL;
 }
 
 Request::~Request()
@@ -37,21 +41,24 @@ Request::~Request()
 
 int Request::Parse(int length)
 {
+    buffer_length_ = length;
     if( NULL == buffer_ || length <= 0 )
     {
         logger_<<ERROR<<"Request error!"<<endl;
         return -1;
     }
-
     int data_length = length;
     char delim[] = "\r\n\r\n";
     data_ = SplitBuffer(buffer_, data_length, delim, strlen(delim));
+    header_length_ = data_ - buffer_;
     if(data_ == NULL)
     {
-        logger_<<ERROR<<"Part decode error! buffer:"<<buffer_<<endl;
+        logger_<<ERROR<<"Part decode error! "<<endl;
         return -2;
     }
     string header(buffer_);
+    // logger_<<INFO<<header<<endl;
+
     // 解析header
     vector<string> lines = Split(header, "\r\n");
     if(lines.size() <= 0)
@@ -133,6 +140,7 @@ int Request::Parse(int length)
             if(data_length != ToType<int, string>(HEADER["Content-Length"]))
             {
                 logger_<<WARNING<<"The length of data["<<data_length<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
+                return -100;
             }
         }
 
@@ -140,6 +148,36 @@ int Request::Parse(int length)
         {
             DecodeData(data_);
         }
+    }
+    return 0;
+}
+
+int Request::Append(int new_length)
+{
+    data_ = buffer_ + header_length_;
+    int data_length = new_length - header_length_;
+    if(data_length != ToType<int, string>(HEADER["Content-Length"]))
+    {
+        logger_<<WARNING<<"The length of data["<<data_length<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
+        return -100;
+    }
+
+    if(HEADER["Content-Type"] == "")
+    {
+        string path = UPLOAD_DIR;
+        path += "/aaa.png";
+        FILE * template_file = fopen(path.c_str(), "w");
+        int offset = 0;
+        while(offset < data_length)
+        {
+            int length = fwrite(data_ + offset, sizeof(char), data_length - offset, template_file);
+            offset += length;
+        }
+        fclose(template_file);
+    }
+    else
+    {
+        DecodeData(data_);
     }
     return 0;
 }
@@ -222,11 +260,25 @@ int Request::Reset()
     GET.clear();
     POST.clear();
     COOKIE.clear();
-    memset(buffer_, 0, REQUEST_BUFFER_SIZE);
+    memset(buffer_, 0, buffer_size_);
+    header_length_ = 0;
     return 0;
 }
 
-char * Request::GetBuffer()
+
+char * Request::EnlargeBuffer(int new_size)
 {
+    cout<<DEBUG<<"Enlarge buffer from ["<<buffer_size_<<"] to ["<<new_size<<"]"<<endl;
+    if(buffer_size_ >= new_size)
+    {
+        logger_<<ERROR<<"The new size["<<new_size<<"] to be set can not smaller than the current size["<<buffer_size_<<"]"<<endl;
+        return NULL;
+    }
+    char * new_buffer = new char[new_size];
+    memcpy(new_buffer, buffer_, buffer_size_);
+    // copy(buffer_, buffer_ + buffer_size_, new_buffer);
+    delete [] buffer_;
+    buffer_ = new_buffer;
+    buffer_size_ = new_size;
     return buffer_;
 }

@@ -24,11 +24,14 @@ public:
     int End();
     int Reset();
     int Close();
+    int AddRecvLength(int length);
+    int GetRecvLeft() { return request_.GetBufferSize() - recv_length; }
 
 public:
     int recv_length;
     int send_length;
     char * pBuffer;
+    bool pending;
 
 private:
     int sockfd_;

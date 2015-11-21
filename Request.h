@@ -27,7 +27,10 @@ public:
     ~Request();
     int Parse(int length);
     int Reset();
-    char * GetBuffer();
+    char * GetBuffer() { return buffer_; }
+    int GetBufferSize() { return buffer_size_; }
+    char * EnlargeBuffer(int new_size);
+    int Append(int new_length);
 
 private:
     int DecodeCookie(string cookie_str);
@@ -46,6 +49,9 @@ public:
 private:
     char * buffer_;
     char * data_;
+    int buffer_length_;
+    int buffer_size_;
+    int header_length_;
     Logger logger_;
 };
 

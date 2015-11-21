@@ -29,7 +29,10 @@ int HandleHttpRequest(int epfd, int sockfd)
     if(search != connections.end())
     {
         pConnection = search->second;
-        pConnection->Reset();
+        if(!pConnection->pending)
+        {
+            pConnection->Reset();
+        }
     }
     else
     {
@@ -44,13 +47,13 @@ int HandleHttpRequest(int epfd, int sockfd)
         return -1;
     }
 
-    char* pBuffer = pConnection->pBuffer;
     while(true)
     {
-        int length = recv(sockfd, pBuffer + pConnection->recv_length, REQUEST_BUFFER_SIZE - pConnection->recv_length, 0);
+        int length = recv(sockfd, pConnection->pBuffer + pConnection->recv_length, pConnection->GetRecvLeft(), 0);
+        // logger<<DEBUG<<pConnection->GetRecvLeft()<<"   "<<length<<endl;
         if(length > 0)
         {
-            pConnection->recv_length += length;
+            pConnection->AddRecvLength(length);
         }
         else if(length < 0)
         {
@@ -65,23 +68,25 @@ int HandleHttpRequest(int epfd, int sockfd)
             return 0;
         }
     }
-
-    if( 0 != pConnection->PostRecv() )
+    ret = pConnection->PostRecv();
+    if( ret == 0)
+    {
+        struct epoll_event event;
+        event.data.fd = sockfd;
+        event.events = EPOLLOUT | EPOLLERR | EPOLLET;
+        ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
+        if(ret != 0)
+        {
+            logger<<ERROR<<"HandleHttpRequest: epoll_ctl error, ret: "<<ret<<" errno: "<<errno<<endl;
+        }
+    }
+    else if(ret != -100)
     {
         pConnection->Close();
         return -1;
     }
 
     logger<<VERBOSE<<"HandleHttpRequest: length: "<<pConnection->recv_length<<" fd: "<<sockfd<<endl;
-
-    struct epoll_event event;
-    event.data.fd = sockfd;
-    event.events = EPOLLOUT | EPOLLERR | EPOLLET;
-    ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
-    if(ret != 0)
-    {
-        logger<<ERROR<<"HandleHttpRequest: epoll_ctl error, ret: "<<ret<<" errno: "<<errno<<endl;
-    }
     return 0;
 }
 
@@ -130,7 +135,7 @@ int HandleHttpResponse(int epfd, int sockfd)
     {
         struct epoll_event event;
         event.data.fd = sockfd;
-        event.events = EPOLLIN | EPOLLERR;
+        event.events = EPOLLIN | EPOLLERR | EPOLLET;
         int ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
         if(ret != 0)
         {
