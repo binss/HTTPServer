@@ -42,34 +42,13 @@ int HandleHttpRequest(int epfd, int sockfd)
         ret = epoll_ctl(epfd, EPOLL_CTL_DEL, sockfd, NULL);
         if(ret != 0)
         {
-            printf("[HandleHttpResponse]epoll_ctl error, ret: %d, errno: %d\n", ret, errno);
+            printf("epoll_ctl error, ret: %d, errno: %d\n", ret, errno);
         }
         return -1;
     }
 
-    while(true)
-    {
-        int length = recv(sockfd, pConnection->pBuffer + pConnection->recv_length, pConnection->GetRecvLeft(), 0);
-        // logger<<DEBUG<<pConnection->GetRecvLeft()<<"   "<<length<<endl;
-        if(length > 0)
-        {
-            pConnection->AddRecvLength(length);
-        }
-        else if(length < 0)
-        {
-            // 数据读取完毕
-            break;
-            // -1 ERRNO 11 代表socket 未可读
-        }
-        else if(length == 0)
-        {
-            // 如果收到0，代表客户端主动断开
-            close(sockfd);
-            return 0;
-        }
-    }
-    ret = pConnection->PostRecv();
-    if( ret == 0)
+    ret = pConnection->Recv();
+    if(ret == 0)
     {
         struct epoll_event event;
         event.data.fd = sockfd;
@@ -77,16 +56,16 @@ int HandleHttpRequest(int epfd, int sockfd)
         ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
         if(ret != 0)
         {
-            logger<<ERROR<<"HandleHttpRequest: epoll_ctl error, ret: "<<ret<<" errno: "<<errno<<endl;
+            logger<<ERROR<<"epoll_ctl error, ret: "<<ret<<" errno: "<<errno<<endl;
         }
     }
-    else if(ret != -100)
+    else if(ret != E_Request_Not_Complete && ret != E_Client_Close)
     {
+        logger<<ERROR<<"Recv error. ret "<<ret<<endl;
         pConnection->Close();
         return -1;
     }
 
-    logger<<VERBOSE<<"HandleHttpRequest: length: "<<pConnection->recv_length<<" fd: "<<sockfd<<endl;
     return 0;
 }
 
@@ -94,39 +73,13 @@ int HandleHttpResponse(int epfd, int sockfd)
 {
     // errno = 0;
     Connection *pConnection = connections[sockfd];
-    int length = pConnection->PreSend();
-    if(length < 0)
+    int ret = pConnection->Send();
+    if(ret)
     {
-        // error, close the socket
-        pConnection->Close();
-        return -1;
+        logger<<ERROR<<"Send error. ret "<<ret<<endl;
     }
-
-    while(true)
-    {
-        //检查有无已读取还未写入的
-        int remain_length = length - pConnection->send_length;
-        // const char * buffer = response_str.c_str();
-        if (remain_length > 0)
-        {
-            int lenght = send(sockfd, pConnection->pBuffer + pConnection->send_length, remain_length, 0);
-            pConnection->send_length += lenght;
-            if(lenght != remain_length)
-            {
-                // 缓冲区已满，返回
-                return -1;
-            }
-        }
-        else
-        {
-            // 已经写完
-            break;
-        }
-    }
-
-    logger<<VERBOSE<<"HandleHttpResponse: length: "<<pConnection->send_length<<" fd: "<<sockfd<<endl;
-
-    if(pConnection->End())
+    ret = pConnection->End();
+    if(ret)
     {
         connections.erase(sockfd);
         delete pConnection;
@@ -139,7 +92,7 @@ int HandleHttpResponse(int epfd, int sockfd)
         int ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
         if(ret != 0)
         {
-            logger<<ERROR<<"HandleHttpResponse: epoll_ctl error, ret: "<<ret<<" errno: "<<errno<<endl;
+            logger<<ERROR<<"epoll_ctl error, ret: "<<ret<<" errno: "<<errno<<endl;
         }
     }
 

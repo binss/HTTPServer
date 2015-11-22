@@ -57,8 +57,7 @@ int Request::Parse(int length)
         return -2;
     }
     string header(buffer_);
-    // logger_<<INFO<<header<<endl;
-
+    logger_<<WARNING<<header<<endl;
     // 解析header
     vector<string> lines = Split(header, "\r\n");
     if(lines.size() <= 0)
@@ -132,6 +131,7 @@ int Request::Parse(int length)
             logger_<<ERROR<<"Header line decode error! meta:"<<token[0]<<endl;
         }
     }
+        cout<<data_<<endl;
 
     if(METHOD == "POST")
     {
@@ -226,6 +226,7 @@ int Request::DecodeData(string data)
     // else if...
     else
     {
+        // 可能存在raw data
         regex reg("(.+); *boundary=(.+)");
         smatch token;
         if(regex_match(HEADER["Content-Type"], token, reg))
@@ -243,6 +244,7 @@ int Request::DecodeData(string data)
                     }
                     // logger_<<DEBUG<<"type["<<iter->format("$1")<<"] ["<<iter->format("$2")<<"]=["<<iter->format("$3")<<"]"<<endl;
                 }
+                // TODO
             }
         }
     }
@@ -266,13 +268,13 @@ int Request::Reset()
 }
 
 
-char * Request::EnlargeBuffer(int new_size)
+int Request::EnlargeBuffer(int new_size)
 {
-    cout<<DEBUG<<"Enlarge buffer from ["<<buffer_size_<<"] to ["<<new_size<<"]"<<endl;
+    logger_<<DEBUG<<"Enlarge buffer from ["<<buffer_size_<<"] to ["<<new_size<<"]"<<endl;
     if(buffer_size_ >= new_size)
     {
         logger_<<ERROR<<"The new size["<<new_size<<"] to be set can not smaller than the current size["<<buffer_size_<<"]"<<endl;
-        return NULL;
+        return -1;
     }
     char * new_buffer = new char[new_size];
     memcpy(new_buffer, buffer_, buffer_size_);
@@ -280,5 +282,5 @@ char * Request::EnlargeBuffer(int new_size)
     delete [] buffer_;
     buffer_ = new_buffer;
     buffer_size_ = new_size;
-    return buffer_;
+    return 0;
 }

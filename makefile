@@ -1,5 +1,5 @@
 CC      = g++
-CFLAGS  = -Wall -g -lz -std=c++11
+CFLAGS  = -Wall -g -lz -lrt -std=c++11
 INCLUDEFLAGS =
 LDFLAGS =
 OBJS := $(patsubst %.c,%.o,$(wildcard *.c))

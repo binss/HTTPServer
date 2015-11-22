@@ -29,10 +29,23 @@ void main_page(Request &request, Response &response)
     }
     // LOG<<DEBUG<<"\nGET\n"<<request.GET<<endl;
     // LOG<<DEBUG<<"\nCOOKIE\n"<<request.COOKIE<<endl;
-
-
-
 }
+
+void upload_page(Request &request, Response &response)
+{
+    if(request.METHOD == "GET")
+    {
+        response.SetCode(200);
+        response.SetFile("upload.html");
+    }
+    else if(request.METHOD == "POST")
+    {
+        LOG<<DEBUG<<request.POST["name"]<<endl;
+        response.SetCode(200);
+        response.SetRawString("OK");
+    }
+}
+
 
 void error_404(Request &request, Response &response)
 {

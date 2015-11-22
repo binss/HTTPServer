@@ -31,6 +31,8 @@
 
 #define MAX_AGE 6000
 
+#define Connection_Alive_Time 60
+
 enum LogLevel
 {
     VERBOSE = 0,
@@ -41,5 +43,10 @@ enum LogLevel
     CRITICAL
 };
 
+enum ErrorNo
+{
+    E_Request_Not_Complete = -100,
+    E_Client_Close = -101,
+};
 
 #endif

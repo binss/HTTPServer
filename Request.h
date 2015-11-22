@@ -29,7 +29,7 @@ public:
     int Reset();
     char * GetBuffer() { return buffer_; }
     int GetBufferSize() { return buffer_size_; }
-    char * EnlargeBuffer(int new_size);
+    int EnlargeBuffer(int new_size);
     int Append(int new_length);
 
 private:

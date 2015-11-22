@@ -66,7 +66,7 @@ void Mapper::InitViewMap()
     view_map_["/"] = main_page;
     view_map_["/404/"] = error_404;
     view_map_["/403/"] = error_403;
-
+    view_map_["/upload/"] = upload_page;
 }
 
 

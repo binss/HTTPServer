@@ -19,6 +19,7 @@ typedef void (* View)(Request &, Response &);
 void main_page(Request &request, Response &response);
 void error_403(Request &request, Response &response);
 void error_404(Request &request, Response &response);
+void upload_page(Request &request, Response &response);
 
 
 #endif

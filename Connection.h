@@ -8,6 +8,9 @@
 #ifndef  __CONNECTION_H__
 #define  __CONNECTION_H__
 
+#include <sys/socket.h>
+#include <signal.h>
+#include <time.h>
 
 #include "Request.h"
 #include "Response.h"
@@ -19,18 +22,20 @@ class Connection
 public:
     Connection(int sockfd, char * host);
     ~Connection();
-    int PreSend();
-    int PostRecv();
+    int Send();
+    int Recv();
     int End();
     int Reset();
     int Close();
+
+private:
     int AddRecvLength(int length);
-    int GetRecvLeft() { return request_.GetBufferSize() - recv_length; }
+    int SetTimer();
+    int ResetTimer();
+    static void TimeOut(union sigval sig);
 
 public:
-    int recv_length;
-    int send_length;
-    char * pBuffer;
+
     bool pending;
 
 private:
@@ -38,8 +43,10 @@ private:
     Request request_;
     Response response_;
     string host_;
-    int time_;
+    int recv_length_;
+    int send_length_;
     Logger logger_;
+    timer_t timer_;
 };
 
 #endif
