@@ -43,9 +43,8 @@ public:
     int GetContentLength() { return size_; }
 
 private:
-    int UriDecode(string uri);
+    int DecodeUri(string uri);
     int LoadCache(string & path, int type);
-
 
 private:
     unordered_map<string, string> header_;

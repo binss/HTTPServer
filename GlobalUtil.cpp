@@ -100,7 +100,7 @@ vector<string> Split(const string& s, const string& delim, const bool keep_empty
     return result;
 }
 
-char * SplitBuffer(char * buffer, int & buffer_length, char * delim, int delim_length)
+char * SplitBuffer(char * buffer, int & buffer_length, const char * delim, int delim_length)
 {
     if(buffer == NULL || delim == NULL || buffer_length <= 0 || delim_length <= 0)
     {
@@ -133,3 +133,37 @@ char * SplitBuffer(char * buffer, int & buffer_length, char * delim, int delim_l
     buffer_length = end - new_buffer;
     return new_buffer;
 }
+
+
+
+vector<Buffer> Split(const char * buffer, int buffer_length, const char * delim, int delim_length, const bool keep_empty)
+{
+    vector<Buffer> result;
+    if(buffer == NULL || delim == NULL || buffer_length <= 0 || delim_length <= 0)
+    {
+        return result;
+    }
+    int start_pos = 0;
+    int end_pos = 0;
+    while(end_pos < buffer_length)
+    {
+        if( memcmp((void *)(buffer + end_pos), delim, delim_length) == 0 )
+        {
+            if(keep_empty || end_pos - start_pos != 0)
+            {
+                int length = end_pos - start_pos;
+                char * part = new char[length + 1];
+                memset(part, 0, length + 1);
+                memmove(part, buffer + start_pos, length);
+                Buffer buf;
+                buf.pointer = part;
+                buf.length = length;
+                result.push_back(buf);
+            }
+            start_pos = end_pos + delim_length;
+        }
+        end_pos ++;
+    }
+    return result;
+}
+

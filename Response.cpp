@@ -73,7 +73,7 @@ int Response::Init(Request &request)
 
     etag_ = header["If-None-Match"];
 
-    UriDecode(request.URI);
+    DecodeUri(request.URI);
 
     // 接收范围请求
     // header_["Accept-Ranges"] = "bytes";
@@ -99,7 +99,7 @@ int Response::Init(Request &request)
     return 0;
 }
 
-int Response::UriDecode(string uri)
+int Response::DecodeUri(string uri)
 {
     string file_type = "default";
     if(uri != "")

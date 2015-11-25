@@ -24,7 +24,7 @@
 
 #define TEMPLATES_DIR "/home/binss/HTTPServer/templates"
 #define RESOURCES_DIR "/home/binss/HTTPServer/resources"
-#define UPLOAD_DIR "/home/binss/HTTPServer/upload"
+#define UPLOAD_DIR "/home/binss/HTTPServer/upload/"
 
 #define COMPRESS_ON true
 #define COMPRESS_LEVEL 9

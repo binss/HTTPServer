@@ -20,11 +20,18 @@
 
 using namespace std;
 
+struct Buffer
+{
+    char * pointer;
+    int length;
+};
+
 string GetTime(int offset);
 string GetCurFormatTime(string format);
 void EnsureDirectory(const char * path);
 int Compress(unsigned char *dest, uLong & dest_len, unsigned char *src, uLong src_len, int level);
 vector<string> Split(const string& s, const string& delim, const bool keep_empty = true);
-char * SplitBuffer(char * buffer, int & buffer_length, char * delim, int delim_length);
+char * SplitBuffer(char * buffer, int & buffer_length, const char * delim, int delim_length);
+vector<Buffer> Split(const char * buffer, int buffer_length, const char * delim, int delim_length, const bool keep_empty);
 
 #endif

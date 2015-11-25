@@ -30,7 +30,6 @@ Request::Request():logger_("Request", DEBUG, true)
     buffer_size_ = REQUEST_DEFAULT_BUFFER_SIZE;
     buffer_length_ = 0;
     buffer_ = new char[buffer_size_];
-    data_ = NULL;
 }
 
 Request::~Request()
@@ -47,17 +46,16 @@ int Request::Parse(int length)
         logger_<<ERROR<<"Request error!"<<endl;
         return -1;
     }
-    int data_length = length;
+    DATA.length = length;
     char delim[] = "\r\n\r\n";
-    data_ = SplitBuffer(buffer_, data_length, delim, strlen(delim));
-    header_length_ = data_ - buffer_;
-    if(data_ == NULL)
+    DATA.pointer = SplitBuffer(buffer_, DATA.length, delim, strlen(delim));
+    header_length_ = DATA.pointer - buffer_;
+    if(DATA.pointer == NULL)
     {
-        logger_<<ERROR<<"Part decode error! "<<endl;
+        logger_<<ERROR<<"Part decode error!"<<endl;
         return -2;
     }
     string header(buffer_);
-    logger_<<WARNING<<header<<endl;
     // 解析header
     vector<string> lines = Split(header, "\r\n");
     if(lines.size() <= 0)
@@ -131,53 +129,39 @@ int Request::Parse(int length)
             logger_<<ERROR<<"Header line decode error! meta:"<<token[0]<<endl;
         }
     }
-        cout<<data_<<endl;
 
     if(METHOD == "POST")
     {
         if(HEADER["Content-Length"] != "")
         {
-            if(data_length != ToType<int, string>(HEADER["Content-Length"]))
+            if(DATA.length != ToType<int, string>(HEADER["Content-Length"]))
             {
-                logger_<<WARNING<<"The length of data["<<data_length<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
+                logger_<<WARNING<<"The length of data["<<DATA.length<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
                 return -100;
+            }
+            if(HEADER["Content-Type"] != "")
+            {
+                DecodeData();
+            }
+            else
+            {
+                logger_<<ERROR<<"Content-Type is null!"<<endl;
             }
         }
 
-        if(HEADER["Content-Type"] != "")
-        {
-            DecodeData(data_);
-        }
+
     }
     return 0;
 }
 
 int Request::Append(int new_length)
 {
-    data_ = buffer_ + header_length_;
+    DATA.pointer = buffer_ + header_length_;
     int data_length = new_length - header_length_;
     if(data_length != ToType<int, string>(HEADER["Content-Length"]))
     {
         logger_<<WARNING<<"The length of data["<<data_length<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
         return -100;
-    }
-
-    if(HEADER["Content-Type"] == "")
-    {
-        string path = UPLOAD_DIR;
-        path += "/aaa.png";
-        FILE * template_file = fopen(path.c_str(), "w");
-        int offset = 0;
-        while(offset < data_length)
-        {
-            int length = fwrite(data_ + offset, sizeof(char), data_length - offset, template_file);
-            offset += length;
-        }
-        fclose(template_file);
-    }
-    else
-    {
-        DecodeData(data_);
     }
     return 0;
 }
@@ -203,13 +187,26 @@ int Request::DecodeCookie(string cookie_str)
     return 0;
 }
 
-int Request::DecodeData(string data)
+int Request::SaveDataToFile(string filename, char * data, int data_length)
 {
-    // application/x-www-form-urlencoded
-    // multipart/form-data; boundary=----WebKitFormBoundaryoUZxy8WfgYJUqTaA
+
+    string path = UPLOAD_DIR + filename;
+    FILE * template_file = fopen(path.c_str(), "w");
+    int offset = 0;
+    while(offset < data_length)
+    {
+        int length = fwrite(data + offset, sizeof(char), data_length - offset, template_file);
+        offset += length;
+    }
+    fclose(template_file);
+    return 0;
+}
+
+int Request::DecodeData()
+{
     if(HEADER["Content-Type"] == "application/x-www-form-urlencoded")
     {
-        vector<string> paras = Split(data, "&");
+        vector<string> paras = Split(string(DATA.pointer), "&");
         for(unsigned int i=0; i<paras.size(); i++)
         {
             vector<string> token = Split(paras[i], "=");
@@ -226,38 +223,60 @@ int Request::DecodeData(string data)
     // else if...
     else
     {
-        // 可能存在raw data
         regex reg("(.+); *boundary=(.+)");
         smatch token;
         if(regex_match(HEADER["Content-Type"], token, reg))
         {
             if(token[1] == "multipart/form-data")
             {
-                // Chrome && Safari
-                string data_reg_str = "-*" + token[2].str() + "\r\nContent-Disposition: (.*); name=\"(.*)\"\r\n\r\n(.*)";
-                regex data_reg(data_reg_str);
-                for(sregex_iterator iter(data.cbegin(), data.cend(), data_reg), end; iter != end; ++iter)
+
+                // 切分数据部
+                string delim_str = "\r\n--" + token[2].str();
+                const char * delim = delim_str.c_str();
+                vector<Buffer> parts = Split(DATA.pointer, DATA.length, delim, strlen(delim), false);
+
+                char line_delim[] = "\r\n\r\n";
+                for(unsigned int i=0; i<parts.size(); i++)
                 {
-                    if(iter->format("$1") == "form-data")
+                    int length = parts[i].length;
+                    char * data = SplitBuffer(parts[i].pointer, length, line_delim, strlen(line_delim));
+                    string form_header(parts[i].pointer);
+                    regex data_reg("[\\s\\S]*Content-Disposition: form-data; name=\"(.*)\"(; filename=\"(.*)\"[\\s\\S]+?Content-Type: (.*))?$");
+                    if(regex_match(form_header, token, data_reg))
                     {
-                        POST[iter->format("$2")] = iter->format("$3");
+                        // file
+                        if(token[3] != "" && token[4] != "")
+                        {
+                            SaveDataToFile(token[3], data, length);
+                        }
+                        // form
+                        else if(token[1] != "")
+                        {
+                            POST[token[1]] = string(data);
+                        }
                     }
-                    // logger_<<DEBUG<<"type["<<iter->format("$1")<<"] ["<<iter->format("$2")<<"]=["<<iter->format("$3")<<"]"<<endl;
+                    else
+                    {
+                        logger_<<ERROR<<"form_header decode error. form_header:"<<form_header<<endl;
+                    }
                 }
-                // TODO
+            }
+            else
+            {
+                logger_<<ERROR<<"unknown Content-Type:"<<HEADER["Content-Type"]<<endl;
             }
         }
+        else
+        {
+            logger_<<ERROR<<"Content-Type decode error:"<<token[1]<<endl;
+        }
     }
-    // logger_<<ERROR<<"POST "<<POST<<endl;
-    // logger_<<WARNING<<HEADER["Content-Type"]<<endl;
-
     return 0;
 }
 
 
 int Request::Reset()
 {
-    // data_.clear();
     HEADER.clear();
     GET.clear();
     POST.clear();

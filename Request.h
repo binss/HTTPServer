@@ -34,7 +34,8 @@ public:
 
 private:
     int DecodeCookie(string cookie_str);
-    int DecodeData(string data);
+    int DecodeData();
+    int SaveDataToFile(string filename, char * data, int data_length);
 
 public:
     unordered_map<string, string> GET;
@@ -45,10 +46,10 @@ public:
     string RAW_URI;
     string METHOD;
     string PROTOCOL;
+    Buffer DATA;
 
 private:
     char * buffer_;
-    char * data_;
     int buffer_length_;
     int buffer_size_;
     int header_length_;
