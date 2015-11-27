@@ -10,15 +10,8 @@
 #ifndef  __REQUEST_H__
 #define  __REQUEST_H__
 
-#include <string>
-#include <cstring>
-#include <vector>
-#include <unordered_map>
-#include <regex>
 #include "Logger.h"
-
 using namespace std;
-
 
 class Request
 {
@@ -27,7 +20,7 @@ public:
     ~Request();
     int Parse(int length);
     int Reset();
-    char * GetBuffer() { return buffer_; }
+    Byte * GetBuffer() { return buffer_; }
     int GetBufferSize() { return buffer_size_; }
     int EnlargeBuffer(int new_size);
     int Append(int new_length);
@@ -35,21 +28,18 @@ public:
 private:
     int DecodeCookie(string cookie_str);
     int DecodeData();
-    int SaveDataToFile(string filename, char * data, int data_length);
+    int DecodeHeader();
 
 public:
     unordered_map<string, string> GET;
     unordered_map<string, string> POST;
     unordered_map<string, string> HEADER;
     unordered_map<string, string> COOKIE;
-    string URI;
-    string RAW_URI;
-    string METHOD;
-    string PROTOCOL;
+    Meta META;
     Buffer DATA;
 
 private:
-    char * buffer_;
+    Byte * buffer_;
     int buffer_length_;
     int buffer_size_;
     int header_length_;

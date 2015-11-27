@@ -37,9 +37,9 @@ public:
 public:
     int type_;
     int hit_time_;
-    unsigned char *data_;
+    Byte *data_;
     uLong size_;
-    unsigned char *compress_data_;
+    Byte *compress_data_;
     uLong compress_size_;
     string etag_;
 };
@@ -59,7 +59,7 @@ private:
     static CacheManager *manager;
     bool IsInit_;
     unordered_map<string, Cache *> caches_;
-    unsigned char buffer_[BIG_DATA_SIZE];
+    Byte buffer_[BIG_DATA_SIZE];
     Logger logger_;
 
 };

@@ -8,6 +8,11 @@
 #ifndef __CONSTANTS_H__
 #define __CONSTANTS_H__
 
+#include <string>
+#include <unordered_map>
+
+using namespace std;
+
 #define TIME_BUFFER_LEN 50
 #define SERV_PORT 8888
 #define LISTENQ 1024    /* 2nd argument to listen() */
@@ -43,10 +48,32 @@ enum LogLevel
     CRITICAL
 };
 
-enum ErrorNo
+enum ReturnCode
 {
+    E_Suc = 0,
+
+    E_Decode_Error = -10,
+    E_Operate_Error = -11,
     E_Request_Not_Complete = -100,
     E_Client_Close = -101,
+    E_Server_Close = -102,
+    E_Timer_Error = -103,
+    E_Buffer_Error = -104,
 };
+
+
+struct Meta
+{
+    string URI;
+    string RAW_URI;
+    string METHOD;
+    string PROTOCOL;
+    string ETAG;
+    bool COMPRESS;
+    bool KEEP_ALIVE;
+};
+
+typedef unordered_map<string, string> SSMap;
+
 
 #endif

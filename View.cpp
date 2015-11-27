@@ -11,14 +11,14 @@ Logger LOG("View", DEBUG, true);
 
 void main_page(Request &request, Response &response)
 {
-    if(request.METHOD == "GET")
+    if(request.META.METHOD == "GET")
     {
         response.SetCookie("username", "binss", GetTime(60000));
         response.SetCookie("email", "i@binss.me", GetTime(60000));
         response.SetCode(200);
         response.SetFile("index.html");
     }
-    else if(request.METHOD == "POST")
+    else if(request.META.METHOD == "POST")
     {
         LOG<<DEBUG<<request.POST["name"]<<endl;
         response.SetCode(200);
@@ -33,12 +33,12 @@ void main_page(Request &request, Response &response)
 
 void upload_page(Request &request, Response &response)
 {
-    if(request.METHOD == "GET")
+    if(request.META.METHOD == "GET")
     {
         response.SetCode(200);
         response.SetFile("upload.html");
     }
-    else if(request.METHOD == "POST")
+    else if(request.META.METHOD == "POST")
     {
         LOG<<DEBUG<<request.POST["name"]<<endl;
         response.SetCode(200);

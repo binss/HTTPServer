@@ -40,7 +40,7 @@ void EnsureDirectory(const char * path)
 }
 
 
-int Compress(unsigned char *dest, uLong & dest_len, unsigned char *src, uLong src_len, int level)
+int Compress(Byte *dest, uLong & dest_len, Byte *src, uLong src_len, int level)
 {
     int ret;
     z_stream strm;
@@ -100,14 +100,14 @@ vector<string> Split(const string& s, const string& delim, const bool keep_empty
     return result;
 }
 
-char * SplitBuffer(char * buffer, int & buffer_length, const char * delim, int delim_length)
+Byte * SplitBuffer(Byte * buffer, int & buffer_length, const char * delim, int delim_length)
 {
     if(buffer == NULL || delim == NULL || buffer_length <= 0 || delim_length <= 0)
     {
         return NULL;
     }
     bool match = false;
-    char * end = buffer + buffer_length;
+    Byte * end = buffer + buffer_length;
     while(buffer < end)
     {
         if(*buffer != delim[0])
@@ -129,14 +129,14 @@ char * SplitBuffer(char * buffer, int & buffer_length, const char * delim, int d
     {
         return NULL;
     }
-    char * new_buffer = buffer + delim_length;
+   Byte * new_buffer = buffer + delim_length;
     buffer_length = end - new_buffer;
     return new_buffer;
 }
 
 
 
-vector<Buffer> Split(const char * buffer, int buffer_length, const char * delim, int delim_length, const bool keep_empty)
+vector<Buffer> Split(const Byte * buffer, int buffer_length, const char * delim, int delim_length, const bool keep_empty)
 {
     vector<Buffer> result;
     if(buffer == NULL || delim == NULL || buffer_length <= 0 || delim_length <= 0)
@@ -152,7 +152,7 @@ vector<Buffer> Split(const char * buffer, int buffer_length, const char * delim,
             if(keep_empty || end_pos - start_pos != 0)
             {
                 int length = end_pos - start_pos;
-                char * part = new char[length + 1];
+                Byte * part = new Byte[length + 1];
                 memset(part, 0, length + 1);
                 memmove(part, buffer + start_pos, length);
                 Buffer buf;
@@ -165,5 +165,19 @@ vector<Buffer> Split(const char * buffer, int buffer_length, const char * delim,
         end_pos ++;
     }
     return result;
+}
+
+int SaveDataToFile(string filename, Byte * data, int data_length)
+{
+    string path = UPLOAD_DIR + filename;
+    FILE * template_file = fopen(path.c_str(), "w");
+    int offset = 0;
+    while(offset < data_length)
+    {
+        int length = fwrite(data + offset, sizeof(Byte), data_length - offset, template_file);
+        offset += length;
+    }
+    fclose(template_file);
+    return E_Suc;
 }
 

@@ -35,8 +35,8 @@ private:
     static void TimeOut(union sigval sig);
 
 public:
-
     bool pending;
+    bool erroring;
 
 private:
     int sockfd_;

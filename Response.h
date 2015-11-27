@@ -9,11 +9,10 @@
 #ifndef  __RESPONSE_H__
 #define  __RESPONSE_H__
 
-#include <string>
-#include <vector>
-#include <unordered_map>
 #include "CacheManager.h"
 #include "Logger.h"
+
+typedef unordered_map<string, string> SSMap;
 
 using namespace std;
 
@@ -22,49 +21,46 @@ class Response
 public:
     Response();
     ~Response();
-    int Init(Request &request);
-    int BuildHeader();
+    int Init(SSMap *header, SSMap *cookie, Meta *meta);
     int Build();
     int Reset();
 
+    Byte * GetBuffer() { return buffer_; }
+    int GetBufferLength() { return buffer_length_; }
+    string GetTarget() { return target_; }
+    int GetContentLength() { return size_; }
+
+private:
+    int BuildHeader();
+    int DecodeTarget();
+    int LoadCache(string & path, int type);
+    int AllocBuffer();
+// user interface
+public:
     int SetCookie(const char *name, const char *value, string expires, const char *domain=NULL, const char *path=NULL, bool secure=false);
     void SetFile(string path);
     void SetCode(int code);
     void SetRawString(string str);
 
-
-
-    char * GetBuffer() { return buffer_; }
-    int GetBufferLength() { return buffer_length_; }
-    int GetType() { return type_; }
-    bool GetKeepAlive() { return keep_alive_; }
-    string GetTarget() { return target_; }
-    int GetCode() { return code_; }
-    int GetContentLength() { return size_; }
+public:
+    int CODE;
+    int TYPE;
 
 private:
-    int DecodeUri(string uri);
-    int LoadCache(string & path, int type);
+    SSMap header_;
+    SSMap * request_header_;
+    SSMap * request_cookie_;
+    Meta * meta_;
 
-private:
-    unordered_map<string, string> header_;
-    string method_;
-    string protocol_;
-    string etag_;
-
-    int code_;
-    int type_;
     uLong size_;
-    unsigned char * data_;
+    Byte * data_;
     string target_;
-    bool compress_;
-    bool keep_alive_;
 
-    char * buffer_;
+    Byte * buffer_;
     int buffer_length_;
     int buffer_size_;
 
-    unsigned char *raw_;
+    Byte *raw_;
     Logger logger_;
 };
 

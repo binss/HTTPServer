@@ -7,29 +7,17 @@
     <author>    <time>    <version>    <desc>
 ***********************************************************/
 
-
-#include <stdlib.h>
-#include <sstream>
-
+#include <regex>
 #include "Request.h"
 #include "GlobalUtil.h"
-
-template<class TO, class TI>
-inline TO ToType(const TI& input_obj)
-{
-    stringstream ss;
-    ss << input_obj;
-    TO output_obj;
-    ss >> output_obj;
-    return output_obj;
-}
 
 Request::Request():logger_("Request", DEBUG, true)
 {
     header_length_ = 0;
     buffer_size_ = REQUEST_DEFAULT_BUFFER_SIZE;
     buffer_length_ = 0;
-    buffer_ = new char[buffer_size_];
+    buffer_ = new Byte[buffer_size_];
+    memset(&DATA, 0, sizeof(DATA));
 }
 
 Request::~Request()
@@ -44,7 +32,7 @@ int Request::Parse(int length)
     if( NULL == buffer_ || length <= 0 )
     {
         logger_<<ERROR<<"Request error!"<<endl;
-        return -1;
+        return E_Decode_Error;
     }
     DATA.length = length;
     char delim[] = "\r\n\r\n";
@@ -53,15 +41,15 @@ int Request::Parse(int length)
     if(DATA.pointer == NULL)
     {
         logger_<<ERROR<<"Part decode error!"<<endl;
-        return -2;
+        return E_Decode_Error;
     }
-    string header(buffer_);
+    string header = ToString(buffer_);
     // 解析header
     vector<string> lines = Split(header, "\r\n");
     if(lines.size() <= 0)
     {
         logger_<<ERROR<<"Header decode error! header:"<<header<<endl;
-        return -3;
+        return E_Decode_Error;
     }
     // 对于第一行作特殊处理
     {
@@ -69,14 +57,14 @@ int Request::Parse(int length)
         if(metas.size() != 3)
         {
             logger_<<ERROR<<"Header meta decode error! meta:"<<lines[0]<<endl;
-            return -2;
+            return E_Decode_Error;
         }
-        METHOD = metas[0];
-        RAW_URI = metas[1];
-        PROTOCOL = metas[2];
+        META.METHOD = metas[0];
+        META.RAW_URI = metas[1];
+        META.PROTOCOL = metas[2];
 
         // decode uri
-        vector<string> uri_tokens = Split(RAW_URI, "?");
+        vector<string> uri_tokens = Split(META.RAW_URI, "?");
         switch(uri_tokens.size())
         {
             case 2:
@@ -97,17 +85,19 @@ int Request::Parse(int length)
             }
             case 1:
             {
-                URI = uri_tokens[0];
+                META.URI = uri_tokens[0];
                 break;
             }
             default:
             {
                 logger_<<ERROR<<"URI decode error! uri:"<<metas[1]<<endl;
+                return E_Decode_Error;
             }
 
         }
     }
 
+    // decode header
     smatch token;
     regex reg("(.+): *(.+)");
     for (size_t i = 1; i < lines.size(); ++ i)
@@ -129,41 +119,59 @@ int Request::Parse(int length)
             logger_<<ERROR<<"Header line decode error! meta:"<<token[0]<<endl;
         }
     }
+    DecodeHeader();
 
-    if(METHOD == "POST")
+    if(META.METHOD == "POST")
     {
         if(HEADER["Content-Length"] != "")
         {
             if(DATA.length != ToType<int, string>(HEADER["Content-Length"]))
             {
                 logger_<<WARNING<<"The length of data["<<DATA.length<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
-                return -100;
+                return E_Request_Not_Complete;
             }
             if(HEADER["Content-Type"] != "")
             {
-                DecodeData();
+                int ret = DecodeData();
+                if(ret != E_Suc)
+                {
+                    return ret;
+                }
             }
             else
             {
                 logger_<<ERROR<<"Content-Type is null!"<<endl;
+                return E_Decode_Error;
             }
         }
 
-
     }
-    return 0;
+    return E_Suc;
 }
 
 int Request::Append(int new_length)
 {
     DATA.pointer = buffer_ + header_length_;
-    int data_length = new_length - header_length_;
-    if(data_length != ToType<int, string>(HEADER["Content-Length"]))
+    DATA.length = new_length - header_length_;
+    if(DATA.length != ToType<int, string>(HEADER["Content-Length"]))
     {
-        logger_<<WARNING<<"The length of data["<<data_length<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
-        return -100;
+        logger_<<WARNING<<"The length of data["<<DATA.length<<"] is not equal to the Content-Length["<<HEADER["Content-Length"]<<"]!"<<endl;
+        return E_Request_Not_Complete;
     }
-    return 0;
+    if(HEADER["Content-Type"] != "")
+    {
+        int ret = DecodeData();
+        if(ret != E_Suc)
+        {
+            return ret;
+        }
+    }
+    else
+    {
+        logger_<<ERROR<<"Content-Type is null!"<<endl;
+        return E_Decode_Error;
+    }
+    return E_Suc;
 }
 
 int Request::DecodeCookie(string cookie_str)
@@ -184,29 +192,16 @@ int Request::DecodeCookie(string cookie_str)
             logger_<<ERROR<<"cookie token decode error! token:"<<cookies[i]<<endl;
         }
     }
-    return 0;
+    return E_Suc;
 }
 
-int Request::SaveDataToFile(string filename, char * data, int data_length)
-{
 
-    string path = UPLOAD_DIR + filename;
-    FILE * template_file = fopen(path.c_str(), "w");
-    int offset = 0;
-    while(offset < data_length)
-    {
-        int length = fwrite(data + offset, sizeof(char), data_length - offset, template_file);
-        offset += length;
-    }
-    fclose(template_file);
-    return 0;
-}
 
 int Request::DecodeData()
 {
     if(HEADER["Content-Type"] == "application/x-www-form-urlencoded")
     {
-        vector<string> paras = Split(string(DATA.pointer), "&");
+        vector<string> paras = Split(ToString(DATA.pointer), "&");
         for(unsigned int i=0; i<paras.size(); i++)
         {
             vector<string> token = Split(paras[i], "=");
@@ -217,6 +212,7 @@ int Request::DecodeData()
             else
             {
                 logger_<<ERROR<<"Data token decode error! token:"<<paras[i]<<endl;
+                return E_Decode_Error;
             }
         }
     }
@@ -229,7 +225,6 @@ int Request::DecodeData()
         {
             if(token[1] == "multipart/form-data")
             {
-
                 // 切分数据部
                 string delim_str = "\r\n--" + token[2].str();
                 const char * delim = delim_str.c_str();
@@ -239,8 +234,8 @@ int Request::DecodeData()
                 for(unsigned int i=0; i<parts.size(); i++)
                 {
                     int length = parts[i].length;
-                    char * data = SplitBuffer(parts[i].pointer, length, line_delim, strlen(line_delim));
-                    string form_header(parts[i].pointer);
+                    Byte * data = SplitBuffer(parts[i].pointer, length, line_delim, strlen(line_delim));
+                    string form_header = ToString(parts[i].pointer);
                     regex data_reg("[\\s\\S]*Content-Disposition: form-data; name=\"(.*)\"(; filename=\"(.*)\"[\\s\\S]+?Content-Type: (.*))?$");
                     if(regex_match(form_header, token, data_reg))
                     {
@@ -252,25 +247,49 @@ int Request::DecodeData()
                         // form
                         else if(token[1] != "")
                         {
-                            POST[token[1]] = string(data);
+                            POST[token[1]] = ToString(data);
                         }
                     }
                     else
                     {
                         logger_<<ERROR<<"form_header decode error. form_header:"<<form_header<<endl;
+                        return E_Decode_Error;
                     }
                 }
             }
             else
             {
                 logger_<<ERROR<<"unknown Content-Type:"<<HEADER["Content-Type"]<<endl;
+                return E_Decode_Error;
             }
         }
         else
         {
             logger_<<ERROR<<"Content-Type decode error:"<<token[1]<<endl;
+            return E_Decode_Error;
         }
     }
+    return E_Suc;
+}
+
+int Request::DecodeHeader()
+{
+    if(HEADER["Accept-Encoding"].find("gzip") != string::npos)
+    {
+        META.COMPRESS = true;
+    }
+
+    if(HEADER["Connection"] == "close")
+    {
+        META.KEEP_ALIVE = false;
+    }
+    else if(HEADER["Connection"] == "keep-alive" || META.PROTOCOL == "HTTP/1.1")
+    {
+        META.KEEP_ALIVE = true;
+    }
+
+    META.ETAG = HEADER["If-None-Match"];
+
     return 0;
 }
 
@@ -283,7 +302,7 @@ int Request::Reset()
     COOKIE.clear();
     memset(buffer_, 0, buffer_size_);
     header_length_ = 0;
-    return 0;
+    return E_Suc;
 }
 
 
@@ -293,13 +312,12 @@ int Request::EnlargeBuffer(int new_size)
     if(buffer_size_ >= new_size)
     {
         logger_<<ERROR<<"The new size["<<new_size<<"] to be set can not smaller than the current size["<<buffer_size_<<"]"<<endl;
-        return -1;
+        return E_Operate_Error;
     }
-    char * new_buffer = new char[new_size];
+    Byte * new_buffer = new Byte[new_size];
     memcpy(new_buffer, buffer_, buffer_size_);
-    // copy(buffer_, buffer_ + buffer_size_, new_buffer);
     delete [] buffer_;
     buffer_ = new_buffer;
     buffer_size_ = new_size;
-    return 0;
+    return E_Suc;
 }

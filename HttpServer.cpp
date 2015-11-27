@@ -26,7 +26,7 @@ int HandleHttpRequest(int epfd, int sockfd)
     errno = 0;
     unordered_map<int, Connection *>::iterator search = connections.find(sockfd);
     Connection *pConnection;
-    if(search != connections.end())
+    if( search != connections.end() )
     {
         pConnection = search->second;
         if(!pConnection->pending)
@@ -40,7 +40,7 @@ int HandleHttpRequest(int epfd, int sockfd)
         logger<<ERROR<<"Can not find sockfd["<<sockfd<<"]"<<endl;
         close(sockfd);
         ret = epoll_ctl(epfd, EPOLL_CTL_DEL, sockfd, NULL);
-        if(ret != 0)
+        if( ret != E_Suc )
         {
             printf("epoll_ctl error, ret: %d, errno: %d\n", ret, errno);
         }
@@ -48,25 +48,31 @@ int HandleHttpRequest(int epfd, int sockfd)
     }
 
     ret = pConnection->Recv();
-    if(ret == 0)
+    if( ret == E_Server_Close || ret == E_Client_Close )
     {
+        pConnection->Close();
+    }
+    else if( ret == E_Request_Not_Complete )
+    {
+        pConnection->pending = true;
+    }
+    else
+    {
+        if( ret != E_Suc )
+        {
+            pConnection->erroring = true;
+        }
         struct epoll_event event;
         event.data.fd = sockfd;
         event.events = EPOLLOUT | EPOLLERR | EPOLLET;
         ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
-        if(ret != 0)
+        if( ret != E_Suc )
         {
             logger<<ERROR<<"epoll_ctl error, ret: "<<ret<<" errno: "<<errno<<endl;
         }
     }
-    else if(ret != E_Request_Not_Complete && ret != E_Client_Close)
-    {
-        logger<<ERROR<<"Recv error. ret "<<ret<<endl;
-        pConnection->Close();
-        return -1;
-    }
 
-    return 0;
+    return E_Suc;
 }
 
 int HandleHttpResponse(int epfd, int sockfd)
@@ -77,26 +83,31 @@ int HandleHttpResponse(int epfd, int sockfd)
     if(ret)
     {
         logger<<ERROR<<"Send error. ret "<<ret<<endl;
-    }
-    ret = pConnection->End();
-    if(ret)
-    {
-        connections.erase(sockfd);
-        delete pConnection;
+        pConnection->Close();
     }
     else
     {
-        struct epoll_event event;
-        event.data.fd = sockfd;
-        event.events = EPOLLIN | EPOLLERR | EPOLLET;
-        int ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
-        if(ret != 0)
+        ret = pConnection->End();
+        if(ret)
         {
-            logger<<ERROR<<"epoll_ctl error, ret: "<<ret<<" errno: "<<errno<<endl;
+            connections.erase(sockfd);
+            delete pConnection;
         }
+        else
+        {
+            struct epoll_event event;
+            event.data.fd = sockfd;
+            event.events = EPOLLIN | EPOLLERR | EPOLLET;
+            int ret = epoll_ctl(epfd, EPOLL_CTL_MOD, sockfd, &event);
+            if(ret != E_Suc)
+            {
+                logger<<ERROR<<"epoll_ctl error, ret: "<<ret<<" errno: "<<errno<<endl;
+            }
+        }
+
     }
 
-    return 0;
+    return E_Suc;
 }
 
 int SetNonblocking(int fd)
@@ -157,14 +168,14 @@ int HandleNewRequest(int listenfd)
         event.data.fd = sockfd;
         event.events = EPOLLIN | EPOLLET;
         int ret = epoll_ctl(epfd, EPOLL_CTL_ADD, sockfd, &event);
-        if ( ret != 0 )
+        if ( ret != E_Suc )
         {
             // == -1
             logger<<ERROR<<"HandleNewRequest: epoll_ctl error, ret: "<<ret<<endl;
             break;
         }
     }
-    return 0;
+    return E_Suc;
 
 }
 
@@ -263,6 +274,6 @@ int main()
             }
         }
     }
-    return 0;
+    return E_Suc;
 }
 

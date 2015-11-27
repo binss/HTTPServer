@@ -13,6 +13,7 @@ Connection::Connection(int sockfd, char * host):sockfd_(sockfd), host_(host), lo
     recv_length_ = 0;
     send_length_ = 0;
     pending = false;
+    erroring = false;
     SetTimer();
 }
 
@@ -22,14 +23,19 @@ Connection::~Connection()
 
 int Connection::Recv()
 {
+    int ret;
     while(true)
     {
-        char * pBuffer = request_.GetBuffer();
+        Byte * pBuffer = request_.GetBuffer();
         int length = recv(sockfd_, pBuffer + recv_length_, request_.GetBufferSize() - recv_length_, 0);
-        // logger<<DEBUG<<pConnection->GetRecvLeft()<<"   "<<length<<endl;
         if(length > 0)
         {
-            AddRecvLength(length);
+            ret = AddRecvLength(length);
+            if( ret != E_Suc )
+            {
+                logger_<<ERROR<<"AddRecvLength error, ret: "<<ret<<endl;
+                return E_Server_Close;
+            }
         }
         else if(length < 0)
         {
@@ -40,12 +46,12 @@ int Connection::Recv()
         else if(length == 0)
         {
             // 如果收到0，代表客户端主动断开
-            Close();
+            logger_<<INFO<<"Client close the connection"<<endl;
             return E_Client_Close;
         }
     }
+    logger_<<VERBOSE<<"Recv Complete. Length: "<<recv_length_<<" fd: "<<sockfd_<<endl;
 
-    int ret;
     if(pending)
     {
         ret = request_.Append(recv_length_);
@@ -54,21 +60,15 @@ int Connection::Recv()
     {
         ret = request_.Parse(recv_length_);
     }
-    if(ret == E_Request_Not_Complete)
-    {
-        pending = true;
-    }
-
-    logger_<<VERBOSE<<"Recv Complete. Length: "<<recv_length_<<" fd: "<<sockfd_<<endl;
     return ret;
 }
 
 int Connection::Send()
 {
-    int ret = response_.Init(request_);
-    if( 0 == ret )
+    int ret = response_.Init(&request_.HEADER, &request_.COOKIE, &request_.META);
+    if( ret == E_Suc )
     {
-        if( 0 == response_.GetType())
+        if( response_.TYPE == 0 )
         {
             View view = Mapper::GetInstance()->GetView(response_.GetTarget());
             if( NULL == view)
@@ -86,19 +86,18 @@ int Connection::Send()
         }
 
         ret = response_.Build();
-        if( 0 != ret )
+        if( ret != E_Suc )
         {
-            return -1;
+            return ret;
         }
     }
 
-    char * pBuffer = response_.GetBuffer();
+    Byte * pBuffer = response_.GetBuffer();
     int length = response_.GetBufferLength();
-    if(pBuffer == NULL || length < 0)
+    if( pBuffer == NULL || length < 0 )
     {
         // error, close the socket
-        Close();
-        return -2;
+        return E_Buffer_Error;
     }
 
     while(true)
@@ -112,7 +111,7 @@ int Connection::Send()
             if(lenght != remain_length)
             {
                 // 缓冲区已满，返回
-                return -2;
+                return E_Buffer_Error;
             }
         }
         else
@@ -123,19 +122,20 @@ int Connection::Send()
     }
     logger_<<VERBOSE<<"Send Complete. Length: "<<send_length_<<" fd: "<<sockfd_<<endl;
 
-    return ret;
+    return E_Suc;
 }
 
 int Connection::End()
 {
-    logger_<<INFO<<host_<<"  \""<<request_.METHOD<<" "<<request_.RAW_URI<<" "<<request_.PROTOCOL<<"\" "<<response_.GetCode()<<" "<<response_.GetContentLength()<<endl;
+    Meta & meta = request_.META;
+    logger_<<INFO<<host_<<"  \""<<meta.METHOD<<" "<<meta.RAW_URI<<" "<<meta.PROTOCOL<<"\" "<<response_.CODE<<" "<<response_.GetContentLength()<<endl;
     pending = false;
-    if(!response_.GetKeepAlive())
+    if(!meta.KEEP_ALIVE)
     {
         Close();
-        return -1;
+        return E_Server_Close;
     }
-    return 0;
+    return E_Suc;
 }
 
 int Connection::Reset()
@@ -145,7 +145,7 @@ int Connection::Reset()
     send_length_ = 0;
     request_.Reset();
     response_.Reset();
-    return 0;
+    return E_Suc;
 }
 
 int Connection::Close()
@@ -153,7 +153,7 @@ int Connection::Close()
     // 关闭socket
     logger_<<DEBUG<<"Connection["<<sockfd_<<"] closed"<<endl;
     close(sockfd_);
-    return 0;
+    return E_Suc;
 }
 
 int Connection::AddRecvLength(int length)
@@ -165,11 +165,11 @@ int Connection::AddRecvLength(int length)
         int ret = request_.EnlargeBuffer(recv_buffer_size_);
         if(ret)
         {
-            return -1;
+            return ret;
         }
     }
     recv_length_ += length;
-    return 0;
+    return E_Suc;
 }
 
 void Connection::TimeOut(union sigval sig)
@@ -189,15 +189,15 @@ int Connection::ResetTimer()
     if(timer_settime(timer_, 0, &itimer, NULL) < 0 )
     {
         logger_<<ERROR<<"Set timer failed. errno:"<<errno<<endl;
-        return -1;
+        return E_Timer_Error;
     }
-    return 0;
+    return E_Suc;
 }
 
 int Connection::SetTimer()
 {
     struct sigevent sigev;
-    memset (&sigev, 0, sizeof (struct sigevent));
+    memset(&sigev, 0, sizeof (struct sigevent));
     // 以sockfd作为定时器id
     sigev.sigev_value.sival_ptr = this;
 
@@ -208,9 +208,9 @@ int Connection::SetTimer()
     if( timer_create(CLOCK_REALTIME, &sigev, &timer_) < 0 )
     {
         logger_<<ERROR<<"Create Timer failed. errno:"<<errno<<endl;
-        return -1;
+        return E_Timer_Error;
     }
 
     ResetTimer();
-    return 0;
+    return E_Suc;
 }

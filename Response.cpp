@@ -5,40 +5,23 @@
 * Description:   No Description
 ***********************************************************/
 
-#include <time.h>
-#include <stdlib.h>
-#include <cstdio>
-#include <map>
-#include <string>
-#include <cstring>
-#include <sstream>
-#include <zlib.h>
-
 #include "GlobalUtil.h"
 #include "Mapper.h"
 #include "Response.h"
 
-template<class TO, class TI>
-inline TO ToType(const TI& input_obj)
-{
-    stringstream ss;
-    ss << input_obj;
-    TO output_obj;
-    ss >> output_obj;
-    return output_obj;
-}
-
 Response::Response():logger_("Response", DEBUG, true)
 {
-    compress_ = false;
-    keep_alive_ = false;
     raw_ = NULL;
     data_ = NULL;
     buffer_ = NULL;
     buffer_length_ = 0;
     buffer_size_ = 0;
-    type_ = 0;
-    code_ = 0;
+
+    TYPE = 0;
+    CODE = 0;
+    meta_ = NULL;
+    request_header_ = NULL;
+    request_cookie_ = NULL;
 }
 
 Response::~Response()
@@ -50,57 +33,47 @@ Response::~Response()
     header_.clear();
 }
 
-int Response::Init(Request &request)
+int Response::Init(SSMap *header, SSMap *cookie, Meta *meta)
 {
-    unordered_map<string, string> & header = request.HEADER;
-    method_ = request.METHOD;
-    protocol_ = request.PROTOCOL;
+    request_header_ = header;
+    request_cookie_ = cookie;
+    meta_ = meta;
 
-    if(header["Accept-Encoding"].find("gzip") != string::npos)
-    {
-        compress_ = true;
-    }
-
-
-    if(header["Connection"] == "close")
-    {
-        keep_alive_ = false;
-    }
-    else if(header["Connection"] == "keep-alive" || protocol_ == "HTTP/1.1")
-    {
-        keep_alive_ = true;
-    }
-
-    etag_ = header["If-None-Match"];
-
-    DecodeUri(request.URI);
+    DecodeTarget();
 
     // 接收范围请求
     // header_["Accept-Ranges"] = "bytes";
+    AllocBuffer();
 
+    return 0;
+}
+
+int Response::AllocBuffer()
+{
     // 分配内存
-    if(type_ < 20)
+    if(TYPE < 20)
     {
         if(buffer_ == NULL)
         {
-            buffer_ = new char[NORMAL_BUFFER_SIZE];
+            buffer_ = new Byte[NORMAL_BUFFER_SIZE];
             buffer_size_ = NORMAL_BUFFER_SIZE;
         }
     }
-    if(type_ >= 20)
+    if(TYPE >= 20)
     {
         if(buffer_ == NULL || buffer_size_ < BIG_BUFFER_SIZE)
         {
             delete []buffer_;
-            buffer_ = new char[BIG_BUFFER_SIZE];
+            buffer_ = new Byte[BIG_BUFFER_SIZE];
             buffer_size_ = BIG_BUFFER_SIZE;
         }
     }
     return 0;
 }
 
-int Response::DecodeUri(string uri)
+int Response::DecodeTarget()
 {
+    string & uri = meta_->URI;
     string file_type = "default";
     if(uri != "")
     {
@@ -110,13 +83,13 @@ int Response::DecodeUri(string uri)
             if(uri.length() > 4)
             {
                 file_type = uri.substr(uri.length() - 3);
-                type_ = Mapper::GetInstance()->GetContentType(file_type);
-                if(type_ > 0)
+                TYPE = Mapper::GetInstance()->GetContentType(file_type);
+                if(TYPE > 0)
                 {
                     // 请求资源
-                    if( LoadCache(uri, type_) != 0 )
+                    if( LoadCache(uri, TYPE) != 0 )
                     {
-                        type_ = 0;
+                        TYPE = 0;
                         target_ = "/404/";
                     }
                 }
@@ -142,7 +115,7 @@ int Response::DecodeUri(string uri)
         target_ = "/404/";
     }
 
-    logger_<<DEBUG<<"URI: "<<uri<<" target: "<<target_<<" File type: "<<file_type<<"["<<type_<<"]"<<endl;
+    logger_<<DEBUG<<"URI: "<<uri<<" target: "<<target_<<" File type: "<<file_type<<"["<<TYPE<<"]"<<endl;
 
     return 0;
 }
@@ -152,7 +125,7 @@ int Response::BuildHeader()
     header_["Server"] = "Dudu Server/0.1";
     header_["Date"] = GetTime(0);
 
-    switch(type_)
+    switch(TYPE)
     {
         case 0:
         case 1:
@@ -185,24 +158,22 @@ int Response::BuildHeader()
         }
         default:
         {
-            logger_<<ERROR<<"Can not recognize type["<<type_<<"], set to default type[0]"<<endl;
+            logger_<<ERROR<<"Can not recognize type["<<TYPE<<"], set to default type[0]"<<endl;
             header_["Content-Type"] = "text/html; charset=UTF-8";
         }
     }
 
-    if(protocol_ == "HTTP/1.0")
+    if(meta_->PROTOCOL == "HTTP/1.0")
     {
-        if(keep_alive_)
+        if(meta_->KEEP_ALIVE)
         {
             header_["Connection"] = "keep-alive";
         }
-
-        if(compress_)
+        if(meta_->COMPRESS)
         {
             header_["Content-Encoding"] = "gzip";
         }
-
-        if(type_ == 1)
+        if(TYPE == 1)
         {
             // 立即过期，不缓存
             header_["Expires"] = "-1";
@@ -214,18 +185,18 @@ int Response::BuildHeader()
 
         header_["Content-Length"] = ToType<string, uLong>(size_);
     }
-    else if(protocol_ == "HTTP/1.1")
+    else if(meta_->PROTOCOL == "HTTP/1.1")
     {
-        if(!keep_alive_)
+        if(!meta_->KEEP_ALIVE)
         {
             header_["Connection"] = "close";
         }
 
         // 对于页面，分chunked发送 TODO：分chucked
-        if(type_ == 1)
+        if(TYPE == 1)
         {
             header_["Transfer-Encoding"] = "chunked";
-            if(compress_)
+            if(meta_->COMPRESS)
             {
                 header_["Content-Encoding"] = "gzip";
             }
@@ -234,7 +205,7 @@ int Response::BuildHeader()
         }
         else
         {
-            if(compress_)
+            if(meta_->COMPRESS)
             {
                 header_["Content-Encoding"] = "gzip";
             }
@@ -249,10 +220,10 @@ int Response::BuildHeader()
             }
 
             // 判断etag
-            if(etag_ != "" && etag_ == header_["ETag"])
+            if(meta_->ETAG != "" && meta_->ETAG == header_["ETag"])
             {
                 header_["Content-Length"] = "0";
-                code_ = 304;
+                CODE = 304;
             }
             else
             {
@@ -267,25 +238,25 @@ int Response::BuildHeader()
 
 int Response::Build()
 {
-    if( 0 == code_ )
+    if( CODE == 0 )
     {
         logger_<<WARNING<<"The response code should be set!"<<endl;
-        code_ = 500;
-        keep_alive_ = false;
+        CODE = 500;
+        meta_->KEEP_ALIVE = false;
     }
 
-    if( 0 == type_ )
+    if( TYPE == 0 )
     {
         logger_<<WARNING<<"The type should be set!"<<endl;
-        code_ = 500;
-        keep_alive_ = false;
+        CODE = 500;
+        meta_->KEEP_ALIVE = false;
     }
 
     if(NULL == data_)
     {
         logger_<<WARNING<<"The response data should be set!"<<endl;
-        code_ = 500;
-        keep_alive_ = false;
+        CODE = 500;
+        meta_->KEEP_ALIVE = false;
     }
     else
     {
@@ -294,7 +265,7 @@ int Response::Build()
 
 
     // 填充header
-    string reason = Mapper::GetInstance()->GetReason(code_);
+    string reason = Mapper::GetInstance()->GetReason(CODE);
     string protocol = "HTTP/1.1";
     string header_str = protocol + " " + reason + "\r\n";
     for(unordered_map<string, string>::iterator iter = header_.begin(); iter != header_.end(); ++ iter)
@@ -306,14 +277,14 @@ int Response::Build()
     memcpy(buffer_, header_str.c_str(), header_str.length());
     buffer_length_ += header_str.length();
 
-    if(code_ == 304 || code_ == 500)
+    if( CODE == 304 || CODE == 500 )
     {
         return 0;
     }
 
 
     // 填充data
-    if(type_ == 1)
+    if( TYPE == 1 )
     {
         char content_length[20];
 
@@ -339,10 +310,8 @@ int Response::Build()
 
 int Response::Reset()
 {
-    compress_ = false;
-    keep_alive_ = false;
-    type_ = 0;
-    code_ = 0;
+    TYPE = 0;
+    CODE = 0;
     target_ = "";
     header_.clear();
     buffer_length_ = 0;
@@ -361,15 +330,15 @@ int Response::LoadCache(string & path, int type)
     }
     else
     {
-        if(COMPRESS_ON && compress_ && cache->compress_size_ > 0 && cache->compress_data_ != NULL)
+        if(COMPRESS_ON && meta_->COMPRESS && cache->compress_size_ > 0 && cache->compress_data_ != NULL)
         {
-            compress_ = true;
+            meta_->COMPRESS = true;
             size_ = cache->compress_size_;
             data_ = cache->compress_data_;
         }
         else
         {
-            compress_ = false;
+            meta_->COMPRESS = false;
             size_ = cache->size_;
             data_ = cache->data_;
         }
@@ -413,10 +382,10 @@ void Response::SetFile(string path)
     {
         path = "/" + path;
         string file_type = path.substr(path.length() - 3);
-        type_ = Mapper::GetInstance()->GetContentType(file_type);
-        if(type_ > 0)
+        TYPE = Mapper::GetInstance()->GetContentType(file_type);
+        if(TYPE > 0)
         {
-            LoadCache(path, type_);
+            LoadCache(path, TYPE);
         }
         else
         {
@@ -431,10 +400,10 @@ void Response::SetFile(string path)
 
 void Response::SetRawString(string str)
 {
-    compress_ = false;
-    type_ = 1;
+    TYPE = 1;
+    meta_->COMPRESS = false;
     size_ = str.size();
-    raw_ = new unsigned char[size_];
+    raw_ = new Byte[size_];
     memcpy(raw_, str.c_str() , size_);
     data_ = raw_;
 }
@@ -442,5 +411,5 @@ void Response::SetRawString(string str)
 
 void Response::SetCode(int code)
 {
-    code_ = code;
+    CODE = code;
 }

@@ -14,6 +14,7 @@ Logger::Logger()
 
 Logger::Logger(string name, LogLevel level, bool persist):name_(name), level_(level), persist_(persist)
 {
+    line_level_ = VERBOSE;
     if(persist_)
     {
         EnsureDirectory(LOG_FILE_PATH);

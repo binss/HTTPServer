@@ -50,14 +50,14 @@ Cache * CacheManager::GetCache(string path, int type)
         }
         // generate etag
         CleanBuffer();
-        int length = fread(buffer_, sizeof(unsigned char), BIG_DATA_SIZE - 1, template_file);
+        int length = fread(buffer_, sizeof(Byte), BIG_DATA_SIZE - 1, template_file);
         if(length > 0)
         {
             cache = new Cache();
             cache->type_ = type;
             cache->size_ = length;
             cache->SetETag(path);
-            cache->data_ = new unsigned char[length];
+            cache->data_ = new Byte[length];
             memcpy(cache->data_, buffer_ , length);
             // compressable 只压缩文本(type<20)
             if(COMPRESS_ON && cache->type_ < 20)
