@@ -8,6 +8,7 @@
 #include <string>
 #include <iostream>
 #include <vector>
+#include <set>
 #include <unordered_map>
 #include <cstring>
 #include <sstream>
@@ -42,18 +43,34 @@ public:
         cols = res_meta->getColumnCount();
         col_types = new string[cols];
         col_names = new string[cols];
-        for (int i = 0; i < cols; ++i)
+        for(int i = 0; i < cols; ++i)
         {
-            cout.width(20);
-            cout<<res_meta->getColumnLabel(i+1);
-            cout.width(20);
-            cout<<res_meta->getColumnTypeName(i+1);
-            cout.width(20);
-            cout<<res_meta->getColumnDisplaySize(i+1)<<endl<<endl;
+            cout<<res_meta->getColumnLabel(i+1)<<" ";
+            cout<<res_meta->getColumnTypeName(i+1)<<" ";
+            cout<<res_meta->getColumnDisplaySize(i+1)<<endl;
             col_types[i] = res_meta->getColumnTypeName(i+1);
             col_names[i] = res_meta->getColumnLabel(i+1);
         }
 
+        DatabaseMetaData *db_meta = con->getMetaData();
+        ResultSet * table_key_set = db_meta->getPrimaryKeys(con->getCatalog(), con->getSchema(), "Cars");
+        int primary_key_num = table_key_set->rowsCount();
+        if(primary_key_num > 0)
+        {
+            int i=0;
+            while(table_key_set->next())
+            {
+                string key = table_key_set->getString(4);
+                for(int j=0; j<cols; j++)
+                {
+                    if(col_names[j] == key)
+                    {
+                        primary_key_indexs.insert(j);
+                    }
+                }
+                i++;
+            }
+        }
     }
     ~Model()
     {
@@ -107,7 +124,7 @@ public:
         return this->objects;
     }
 
-    int Insert(stringstream &ss)
+    int Insert()
     {
         string name_str = "";
         string arg_str = "";
@@ -120,21 +137,23 @@ public:
         arg_str += "?";
         // cout<<name_str<<endl;
         // cout<<arg_str<<endl;
-        PreparedStatement *pstmt = con->prepareStatement("INSERT INTO Cars(" + name_str + ") VALUES (" + arg_str + ")");
+        string statement = "INSERT INTO Cars(" + name_str + ") VALUES (" + arg_str + ")";
+
+        PreparedStatement *pstmt = con->prepareStatement(statement);
         for (int i = 1; i <= cols; i++)
         {
             string & type = col_types[i-1];
             if(type == "INT")
             {
                 int temp;
-                ss>>temp;
+                set_stream>>temp;
                 cout<<temp<<endl;
                 pstmt->setInt(i, temp);
             }
             else if(type == "TEXT")
             {
                 string temp;
-                ss>>temp;
+                set_stream>>temp;
                 cout<<temp<<endl;
                 pstmt->setString(i, temp);
             }
@@ -142,18 +161,78 @@ public:
         pstmt->executeUpdate();
     }
 
-    int Update(stringstream &ss)
+    int Update()
     {
+        // 这样做的缺点是必须设定primary key才能Update
+        if(primary_key_indexs.size() == 0)
+        {
+            cout<<"error"<<endl;
+            return -1;
+        }
+        string statement = "UPDATE Cars SET ";
+
+        for(int i=0; i<cols-1; i++)
+        {
+            statement += col_names[i] + "=?,";
+        }
+        statement += col_names[cols-1];
+
+        statement += "=? WHERE ";
+
+        set<int>::const_iterator itor = primary_key_indexs.begin();
+        statement += col_names[*itor]  + "=?";
+        for (++itor; itor != primary_key_indexs.end() --; ++itor)
+        {
+            statement += " and " + col_names[*itor] + "=?";
+        }
+        cout<<statement<<endl;
+
+        // // statement = "UPDATE Cars SET Id=?,Name=?,Price=? where Id=1";
+
+        PreparedStatement *pstmt = con->prepareStatement(statement);
+        int where_pos = cols + 1;
+        for (int i = 0; i < cols; i++)
+        {
+            string & type = col_types[i];
+            if(type == "INT")
+            {
+                int temp;
+                set_stream>>temp;
+                pstmt->setInt(i+1, temp);
+                if(primary_key_indexs.find(i) != primary_key_indexs.end())
+                {
+                    pstmt->setInt(where_pos, temp);
+                    where_pos ++;
+                }
+            }
+            else if(type == "TEXT")
+            {
+                string temp;
+                set_stream>>temp;
+                pstmt->setString(i+1, temp);
+                if(primary_key_indexs.find(i) != primary_key_indexs.end())
+                {
+                    pstmt->setString(where_pos, temp);
+                    where_pos ++;
+                }
+            }
+        }
+        pstmt->executeUpdate();
 
     }
 
     int Save(ModelType & model)
     {
+        this->Set(model);
         if(model._exist)
         {
-
+            Update();
         }
-        this->Set(model);
+        else
+        {
+            Insert();
+        }
+
     }
 
     int Save(ModelType * models, int length)
@@ -167,6 +246,7 @@ public:
 
 protected:
     vector<ModelType> objects;
+    stringstream set_stream;
 
 private:
     Driver *driver;
@@ -177,8 +257,7 @@ private:
     int cols;
     string *col_types;
     string *col_names;
-
-
+    set<int> primary_key_indexs;
 };
 
 struct DT_User
@@ -210,10 +289,8 @@ public:
     }
     int Set(DT_User & user)
     {
-        stringstream ss;
-        ss<<user.Id<<endl;
-        ss<<user.Name<<endl;
-        ss<<user.Price<<endl;
-        Insert(ss);
+        set_stream<<user.Id<<endl;
+        set_stream<<user.Name<<endl;
+        set_stream<<user.Price<<endl;
     }
 };
