@@ -21,24 +21,128 @@
 using namespace std;
 using namespace sql;
 
-#define DB_HOST "tcp://172.17.0.2:3306"
+#define DB_HOST "tcp://172.17.0.3:3306"
 #define DB_USER "binss"
 #define DB_PASSWORD "123456"
 #define DB_NAME "dudu"
 
-template<typename ModelType>
+class Field
+{
+public:
+    Field(int index, bool is_primary_key): index_(index), is_primary_key_(is_primary_key)
+    {
+
+    }
+    Field(const Field& obj): index_(obj.index_), is_primary_key_(obj.is_primary_key_)
+    {
+    }
+    virtual void Set(void * ptr) = 0;
+
+protected:
+    int index_;
+    bool is_primary_key_;
+    Field * next_;
+};
+
+class IntField: public Field
+{
+public:
+    IntField(int index, bool is_primary_key = false) : Field(index, is_primary_key)
+    {
+        value_ = 0;
+    }
+    IntField(const IntField& obj): Field(obj)
+    {
+        value_ = obj.value();
+    }
+    const IntField & operator=(const int & value)
+    {
+        value_ = value;
+        return *this;
+    }
+    operator int()
+    {
+        return value_;
+    }
+    int value() const
+    {
+        return value_;
+    }
+    void Set(void * ptr)
+    {
+        value_ = *(int *)ptr;
+    }
+private:
+    int value_;
+};
+
+class StringField: public Field
+{
+public:
+    StringField(int index, bool is_primary_key = false): Field(index, is_primary_key), value_("")
+    {
+    }
+    StringField(const StringField & obj): Field(obj)
+    {
+        value_ = obj.value();
+    }
+    const StringField & operator=(const string & value)
+    {
+        value_ = value;
+        return *this;
+    }
+    operator string()
+    {
+        return value_;
+    }
+    operator const char *()
+    {
+        return value_.c_str();
+    }
+    string value() const
+    {
+        return value_;
+    }
+    void Set(void * ptr)
+    {
+        value_ = string(*(const char **)ptr);
+    }
+private:
+    string value_;
+};
+
+class ModelObject
+{
+public:
+    template<class ValType>
+    void SetFieldByIndex(int index, ValType val)
+    {
+        field_list_[index-1]->Set(&val);
+    }
+public:
+    Field ** field_list_;
+
+protected:
+    int counter_;
+
+private:
+    bool exist_;
+    int fields_;
+};
+
+
+template<typename ModelObjectName>
 class Model
 {
 public:
-    Model(const char *str)
+    Model(const char *name):name_(name)
     {
-        table_name = string(str);
         driver = get_driver_instance();
         con = driver->connect(DB_HOST, DB_USER, DB_PASSWORD);
         con->setSchema(DB_NAME);
 
         stmt = con->createStatement();
-        ResultSet *res = stmt->executeQuery("select * from " + table_name);
+        ResultSet *res = stmt->executeQuery("select * from " + name_);
         ResultSetMetaData *res_meta = res->getMetaData();
         cols = res_meta->getColumnCount();
         col_types = new string[cols];
@@ -51,246 +155,110 @@ public:
             col_types[i] = res_meta->getColumnTypeName(i+1);
             col_names[i] = res_meta->getColumnLabel(i+1);
         }
+        // DatabaseMetaData *db_meta = con->getMetaData();
+        // ResultSet * table_key_set = db_meta->getPrimaryKeys(con->getCatalog(), con->getSchema(), "Cars");
+        // int primary_key_num = table_key_set->rowsCount();
+        // if(primary_key_num > 0)
+        // {
+        //     int i=0;
+        //     while(table_key_set->next())
+        //     {
+        //         string key = table_key_set->getString(4);
+        //         for(int j=0; j<cols; j++)
+        //         {
+        //             if(col_names[j] == key)
+        //             {
+        //                 primary_key_indexs.insert(j);
+        //             }
+        //         }
+        //         i++;
+        //     }
+        // }
 
-        DatabaseMetaData *db_meta = con->getMetaData();
-        ResultSet * table_key_set = db_meta->getPrimaryKeys(con->getCatalog(), con->getSchema(), "Cars");
-        int primary_key_num = table_key_set->rowsCount();
-        if(primary_key_num > 0)
-        {
-            int i=0;
-            while(table_key_set->next())
-            {
-                string key = table_key_set->getString(4);
-                for(int j=0; j<cols; j++)
-                {
-                    if(col_names[j] == key)
-                    {
-                        primary_key_indexs.insert(j);
-                    }
-                }
-                i++;
-            }
-        }
-    }
-    ~Model()
-    {
-        // delete res;
-        delete stmt;
-        delete con;
     }
 
-    virtual int Set(stringstream &ss)
+    vector<ModelObjectName> All()
     {
-        cout<<"You should implement the Set(stringstream &ss) function in subclass!"<<endl;
-    }
-    virtual int Set(ModelType & model)
-    {
-        cout<<"You should implement the Set(ModelType & model) function in subclass!"<<endl;
-    }
-
-    vector<ModelType> & Get()
-    {
-        string cmd = "SELECT * FROM " + table_name;
+        string cmd = "SELECT * FROM " + name_;
         try
         {
             stmt = con->createStatement();
             ResultSet *res = stmt->executeQuery(cmd);
             ResultSetMetaData *res_meta = res->getMetaData();
-            stringstream ss;
+
+            vector<ModelObjectName> objects;
             while (res->next())
             {
+                ModelObjectName object;
                 for(int i=1; i <= cols; i++)
                 {
-                    // string type = res_meta->getColumnTypeName(i);
                     string &type = col_types[i-1];
                     if(type == "INT")
                     {
-                        ss<<res->getInt(i)<<endl;
+                        object.SetFieldByIndex(i, res->getInt(i));
                     }
                     else if(type == "TEXT")
                     {
-                        // 以'\n'截断
-                        ss<<res->getString(i)<<endl;;
+                        object.SetFieldByIndex(i, res->getString(i));
                     }
                 }
-                this->Set(ss);
+                objects.push_back(object);
             }
-
+            return objects;
         }
         catch (sql::SQLException &e)
         {
-          cout<<"SQLException: "<<e.what()<<"["<<e.getErrorCode()<<"] state:"<< e.getSQLState()<<endl;
-        }
-        return this->objects;
-    }
-
-    int Insert()
-    {
-        string name_str = "";
-        string arg_str = "";
-        for(int i=0; i<cols-1; i++)
-        {
-            name_str += col_names[i] + ",";
-            arg_str += "?,";
-        }
-        name_str += col_names[cols-1];
-        arg_str += "?";
-        // cout<<name_str<<endl;
-        // cout<<arg_str<<endl;
-        string statement = "INSERT INTO Cars(" + name_str + ") VALUES (" + arg_str + ")";
-
-        PreparedStatement *pstmt = con->prepareStatement(statement);
-        for (int i = 1; i <= cols; i++)
-        {
-            string & type = col_types[i-1];
-            if(type == "INT")
-            {
-                int temp;
-                set_stream>>temp;
-                cout<<temp<<endl;
-                pstmt->setInt(i, temp);
-            }
-            else if(type == "TEXT")
-            {
-                string temp;
-                set_stream>>temp;
-                cout<<temp<<endl;
-                pstmt->setString(i, temp);
-            }
-        }
-        pstmt->executeUpdate();
-    }
-
-    int Update()
-    {
-        // 这样做的缺点是必须设定primary key才能Update
-        if(primary_key_indexs.size() == 0)
-        {
-            cout<<"error"<<endl;
-            return -1;
-        }
-        string statement = "UPDATE Cars SET ";
-
-        for(int i=0; i<cols-1; i++)
-        {
-            statement += col_names[i] + "=?,";
-        }
-        statement += col_names[cols-1];
-
-        statement += "=? WHERE ";
-
-        set<int>::const_iterator itor = primary_key_indexs.begin();
-        statement += col_names[*itor]  + "=?";
-        for (++itor; itor != primary_key_indexs.end() --; ++itor)
-        {
-            statement += " and " + col_names[*itor] + "=?";
-        }
-        cout<<statement<<endl;
-
-        // // statement = "UPDATE Cars SET Id=?,Name=?,Price=? where Id=1";
-
-        PreparedStatement *pstmt = con->prepareStatement(statement);
-        int where_pos = cols + 1;
-        for (int i = 0; i < cols; i++)
-        {
-            string & type = col_types[i];
-            if(type == "INT")
-            {
-                int temp;
-                set_stream>>temp;
-                pstmt->setInt(i+1, temp);
-                if(primary_key_indexs.find(i) != primary_key_indexs.end())
-                {
-                    pstmt->setInt(where_pos, temp);
-                    where_pos ++;
-                }
-            }
-            else if(type == "TEXT")
-            {
-                string temp;
-                set_stream>>temp;
-                pstmt->setString(i+1, temp);
-                if(primary_key_indexs.find(i) != primary_key_indexs.end())
-                {
-                    pstmt->setString(where_pos, temp);
-                    where_pos ++;
-                }
-            }
-        }
-        pstmt->executeUpdate();
-
-    }
-
-    int Save(ModelType & model)
-    {
-        this->Set(model);
-        if(model._exist)
-        {
-            Update();
-        }
-        else
-        {
-            Insert();
-        }
-
-    }
-
-    int Save(ModelType * models, int length)
-    {
-        for(int i=0; i<length; i++)
-        {
-            Set(models[i]);
+            cout<<"SQLException: "<<e.what()<<"["<<e.getErrorCode()<<"] state:"<< e.getSQLState()<<endl;
         }
     }
-public:
-
-protected:
-    vector<ModelType> objects;
-    stringstream set_stream;
 
 private:
     Driver *driver;
     Connection *con;
     Statement *stmt;
 
-    string table_name;
+private:
+    string name_;
+
     int cols;
     string *col_types;
     string *col_names;
-    set<int> primary_key_indexs;
 };
 
-struct DT_User
-{
-    int Id;
-    string Name;
-    int Price;
+#define FOR_1()   set_1();
+#define FOR_2()   FOR_1() set_2();
+#define FOR_3()   FOR_2() set_3();
+#define FOR_N(n)  FOR_##n()
 
-    bool _exist;
+#define FIELD(index, name, type, is_primary_key) \
+    type name{index, is_primary_key}; \
+    void set_##index() { field_list_[index-1] = &name; }
+
+#define _DEFINE_MODEL_TAIL(FIELDS) \
+    FIELDS \
 };
 
+#define DEFINE_MODEL(object_name, cols) \
+    class object_name; \
+    class object_name##Model: public Model<object_name> \
+    { \
+    public: \
+        object_name##Model():Model(#object_name){} \
+    }; \
+    class object_name: public ModelObject \
+    { \
+    public: \
+        object_name() \
+        { \
+            field_list_ = new Field *[cols]; \
+            FOR_N(cols) \
+        } \
+        _DEFINE_MODEL_TAIL
 
-class User: public Model<DT_User>
-{
-public:
-    User():Model("Cars")
-    {
 
-    }
-    int Set(stringstream &ss)
-    {
-        DT_User user;
-        ss>>user.Id;
-        ss>>user.Name;
-        ss>>user.Price;
+DEFINE_MODEL(User, 3)(
+    FIELD(1, Id, IntField, true)
+    FIELD(2, Name, StringField, true)
+    FIELD(3, Price, IntField, true)
+)
 
-        user._exist = true;
-        objects.push_back(user);
-    }
-    int Set(DT_User & user)
-    {
-        set_stream<<user.Id<<endl;
-        set_stream<<user.Name<<endl;
-        set_stream<<user.Price<<endl;
-    }
-};

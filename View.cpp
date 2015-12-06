@@ -6,6 +6,7 @@
 ***********************************************************/
 
 #include "View.h"
+#include "Model.h"
 
 Logger LOG("View", DEBUG, true);
 
