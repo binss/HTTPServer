@@ -35,11 +35,13 @@ enum FieldType
 class Field
 {
 public:
-    Field(int index, FieldType type, string name, bool is_primary_key): index_(index), type_(type), name_(name), is_primary_key_(is_primary_key)
+    Field(int index, FieldType type, string name, bool is_primary_key, bool is_auto_increment): index_(index),
+                    type_(type), name_(name), is_primary_key_(is_primary_key), is_auto_increment_(is_auto_increment)
     {
 
     }
-    Field(const Field& obj): index_(obj.index_), type_(obj.type_), name_(obj.name_), is_primary_key_(obj.is_primary_key_)
+    Field(const Field& obj): index_(obj.index_), type_(obj.type_), name_(obj.name_), is_primary_key_(obj.is_primary_key_),
+                    is_auto_increment_(obj.is_auto_increment_)
     {
     }
     FieldType & GetType()
@@ -54,19 +56,25 @@ public:
     {
         return is_primary_key_;
     }
-    virtual void Set(void * ptr) = 0;
-
+    bool IsAutoIncrement()
+    {
+        return is_auto_increment_;
+    }
+    virtual void Set(void * data_ptr) = 0;
+    virtual void Copy(void * obj_ptr) = 0;
 protected:
     int index_;
     FieldType type_;
     string name_;
     bool is_primary_key_;
+    bool is_auto_increment_;
 };
 
 class IntField: public Field
 {
 public:
-    IntField(int index, string name, bool is_primary_key = false) : Field(index, INT, name, is_primary_key)
+    IntField(int index, string name, bool is_primary_key=false, bool is_auto_increment=false):
+                    Field(index, INT, name, is_primary_key, is_auto_increment)
     {
         value_ = 0;
     }
@@ -87,18 +95,52 @@ public:
     {
         return value_;
     }
-    void Set(void * ptr)
+    void Set(void * data_ptr)
     {
-        value_ = *(int *)ptr;
+        value_ = *(int *)data_ptr;
     }
-private:
+    void Copy(void * obj_ptr)
+    {
+        value_ = *(IntField *)obj_ptr;
+    }
+
+protected:
     int value_;
+};
+
+class AutoField: public IntField
+{
+public:
+    AutoField(int index, string name, bool is_primary_key=false) :
+                    IntField(index, name, is_primary_key, true)
+    {
+        is_default_ = true;
+    }
+    // 运算符重载无法继承，需要重新定义
+    const AutoField & operator=(const int & value)
+    {
+        cout<<"warning: you have set the value of auto increment field!"<<endl;
+        is_default_ = false;
+        value_ = value;
+        return *this;
+    }
+    operator int()
+    {
+        return value_;
+    }
+    bool IsDefault()
+    {
+        return is_default_;
+    }
+
+private:
+    bool is_default_;
 };
 
 class StringField: public Field
 {
 public:
-    StringField(int index, string name, bool is_primary_key = false): Field(index, STRING, name, is_primary_key), value_("")
+    StringField(int index, string name, bool is_primary_key=false): Field(index, STRING, name, is_primary_key, false), value_("")
     {
     }
     StringField(const StringField & obj): Field(obj)
@@ -123,10 +165,15 @@ public:
         return value_;
     }
 
-    void Set(void * ptr)
+    void Set(void * data_ptr)
     {
-        value_ = string(*(const char **)ptr);
+        value_ = string(*(const char **)data_ptr);
     }
+    void Copy(void * obj_ptr)
+    {
+        value_ = *(StringField *)obj_ptr;
+    }
+
 private:
     string value_;
 };
@@ -134,7 +181,7 @@ private:
 class ModelObject
 {
 public:
-    ModelObject(): exist_(false)
+    ModelObject(bool exist=false): exist_(exist)
     {
 
     }
@@ -159,8 +206,6 @@ public:
     Field ** field_list_;
 
 protected:
-
-private:
     bool exist_;
 };
 
@@ -205,8 +250,32 @@ public:
         arg_str += "?";
         insert_stmt_  += ") VALUES (" + arg_str + ")";
         cout<<insert_stmt_<<endl;
+        // insert_stmt_ = "INSERT INTO User(Id,Name,Price) VALUES (?,?,?)";
 
+        update_index_ = new int[field_num_];
+        update_stmt_ = "UPDATE " + name_ + " SET ";
+        string where_str = " WHERE ";
+        int where_count = 0;
+        for(int i=1; i<=field_num_; i++)
+        {
+            Field * field = object.GetFieldByIndex(i);
+            if(field->IsPrimaryKey())
+            {
+                where_str += field->GetName() + "=? and ";
+                update_index_[field_num_ - primary_key_num_ + where_count] = i;
+                where_count ++;
+            }
+            else
+            {
+                update_stmt_ += field->GetName() + "=?,";
+                update_index_[i - 1 - where_count] = i;
+            }
+        }
+        where_str = where_str.substr(0, where_str.size() - 4);
+        update_stmt_ = update_stmt_.substr(0, update_stmt_.size() - 1) + where_str;
+        cout<<update_stmt_<<endl;
 
+        // update_stmt_ = "UPDATE Cars SET Name=?,Price=? where Id=?";
         // 校验
         int ret = Varify();
         return ret;
@@ -339,6 +408,14 @@ public:
         for (int i = 1; i <= field_num_; i++)
         {
             Field * field = object.GetFieldByIndex(i);
+            if(field->IsAutoIncrement())
+            {
+                if(((AutoField *)field)->IsDefault())
+                {
+                    pstmt->setNull(i, sql::DataType::INTEGER);
+                    continue;
+                }
+            }
             switch(field->GetType())
             {
                 case INT:
@@ -362,6 +439,30 @@ public:
 
     int Update(ModelObjectName & object)
     {
+        cout<<update_stmt_<<endl;
+        sql::PreparedStatement *pstmt = con->prepareStatement(update_stmt_);
+        for (int i = 1; i <= field_num_; i++)
+        {
+            Field * field = object.GetFieldByIndex(update_index_[i-1]);
+            // cout<<update_index_[i-1]<<endl;
+            switch(field->GetType())
+            {
+                case INT:
+                {
+                    pstmt->setInt(i, *(IntField *)field); break;
+                }
+                case STRING:
+                {
+                    pstmt->setString(i, sql::SQLString(*(StringField *)field)); break;
+                }
+                default:
+                {
+                    cout<<"unknown type! skip"<<endl;
+                    break;
+                }
+            }
+        }
+        pstmt->executeUpdate();
         return 0;
     }
 
@@ -400,9 +501,10 @@ private:
     sql::Statement *stmt;
 
     string insert_stmt_;
+    string update_stmt_;
+    int * update_index_;
 private:
     string name_;
-
     int field_num_;
     int primary_key_num_;
 };
@@ -423,6 +525,8 @@ private:
     FIELDS \
 };
 
+
+
 #define DEFINE_MODEL(object_name, field_num) \
     class object_name; \
     class object_name##Model: public Model<object_name> \
@@ -438,12 +542,20 @@ private:
             field_list_ = new Field *[field_num]; \
             FOR_N(field_num) \
         } \
+        object_name(const object_name& obj): ModelObject(obj.exist_) \
+        { \
+            field_list_ = new Field *[field_num]; \
+            FOR_N(field_num) \
+            for(int i=0; i<field_num; i++) \
+            { \
+                field_list_[i]->Copy(obj.field_list_[i]); \
+            } \
+        } \
         _DEFINE_MODEL_TAIL
 
 
 DEFINE_MODEL(User, 3)(
-    FIELD(1, Id, IntField, true)
+    FIELD(1, Id, AutoField, true)
     FIELD(2, Name, StringField, false)
-    FIELD(3, Price, IntField, true)
+    FIELD(3, Price, IntField, false)
 )
-
