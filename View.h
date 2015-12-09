@@ -13,6 +13,7 @@
 #include "Request.h"
 #include "Response.h"
 #include "Logger.h"
+#include "Model.h"
 
 typedef void (* View)(Request &, Response &);
 

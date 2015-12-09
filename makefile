@@ -4,6 +4,8 @@ INCLUDEFLAGS =
 LDFLAGS =
 OBJS := $(patsubst %.c,%.o,$(wildcard *.c))
 OBJS += $(patsubst %.cpp,%.o,$(wildcard *.cpp))
+SUB_DIR = db
+OBJS += $(patsubst %.cpp,%.o,$(wildcard $(SUB_DIR)/*.cpp))
 TARGETS = HttpServer
 
 .PHONY:all

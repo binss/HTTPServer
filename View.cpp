@@ -6,7 +6,6 @@
 ***********************************************************/
 
 #include "View.h"
-#include "Model.h"
 
 Logger LOG("View", DEBUG, true);
 
@@ -18,6 +17,22 @@ void main_page(Request &request, Response &response)
         response.SetCookie("email", "i@binss.me", GetTime(60000));
         response.SetCode(200);
         response.SetFile("index.html");
+
+        UserModel user_model;
+        if(user_model.Init() == 0)
+        {
+            LOG<<DEBUG<<"init ok"<<endl;
+            vector<User> users = user_model.All();
+            for(unsigned int i=0; i<users.size(); i++)
+            {
+                LOG<<DEBUG<<users[i].Id<<" "<<users[i].Name<<" "<<users[i].Price<<endl;
+            }
+            User & user = users[0];
+            user.Price = 1200;
+            user_model.Save(user);
+        }
+
+
     }
     else if(request.META.METHOD == "POST")
     {
