@@ -2,16 +2,22 @@ CC      = g++
 CFLAGS  = -Wall -g -lz -lrt -lmysqlcppconn -std=c++11
 INCLUDEFLAGS =
 LDFLAGS =
-OBJS := $(patsubst %.c,%.o,$(wildcard *.c))
-OBJS += $(patsubst %.cpp,%.o,$(wildcard *.cpp))
-SUB_DIR = db
-OBJS += $(patsubst %.cpp,%.o,$(wildcard $(SUB_DIR)/*.cpp))
-TARGETS = HttpServer
+SRC_DIR = ./src
+BIN_DIR = ./bin
+SUB_DIRS = db
+
+OBJS := $(patsubst %.c, %.o, $(wildcard ${SRC_DIR}/*.c))
+OBJS += $(patsubst %.cpp, %.o, $(wildcard ${SRC_DIR}/*.cpp))
+OBJS += $(foreach sub_dir, ${SUB_DIRS}, $(patsubst %.c,%.o,$(wildcard ${SRC_DIR}/${sub_dir}/*.c)))
+OBJS += $(foreach sub_dir, ${SUB_DIRS}, $(patsubst %.cpp,%.o,$(wildcard ${SRC_DIR}/${sub_dir}/*.cpp)))
+
+TARGET = HttpServer
+BIN_TARGET = ${BIN_DIR}/${TARGET}
 
 .PHONY:all
-all : $(TARGETS)
+all : $(BIN_TARGET)
 
-HttpServer:HttpServer.o $(OBJS)
+$(BIN_TARGET):$(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS)
 	rm -f *.d *.d.*
 
@@ -30,13 +36,5 @@ HttpServer:HttpServer.o $(OBJS)
 
 .PHONY:clean
 clean:
-	rm -f $(TARGETS) *.o
-# all:
-# 	g++ -o HttpServer.o -c HttpServer.cpp -Wall -g
-# 	g++ -o http_parser.o -c http_parser.c -Wall -g
-# 	g++ -o RequestHandler.o -c RequestHandler.cpp -Wall -g
-# 	g++ -o HttpServer HttpServer.o http_parser.o RequestHandler.o -Wall
+	rm -f $(BIN_TARGET) $(SRC_DIR)/*.o $(SRC_DIR)/${SUB_DIR}/*.o  $(SRC_DIR)/*.d $(SRC_DIR)/${SUB_DIR}/*.d
 
-# .PHONY:clean
-# clean:
-# 	rm -f $(TARGETS) *.o *.d *.d.*
