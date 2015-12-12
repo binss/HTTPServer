@@ -85,6 +85,8 @@ enum FieldType
 {
     INT = 1,
     STRING = 2,
+    DOUBLE = 3,
+    BOOLEAN = 4,
 };
 
 #endif

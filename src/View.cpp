@@ -25,10 +25,11 @@ void main_page(Request &request, Response &response)
             vector<User> users = user_model.All();
             for(unsigned int i=0; i<users.size(); i++)
             {
-                LOG<<DEBUG<<users[i].Id<<" "<<users[i].Name<<" "<<users[i].Price<<endl;
+                LOG<<DEBUG<<users[i].Id<<" "<<users[i].Name<<" "<<users[i].Price<<" "<<users[i].Vip<<endl;
             }
             User & user = users[0];
-            user.Price = 1200;
+            user.Price = 4.33;
+            user.Vip = true;
             user_model.Save(user);
         }
 

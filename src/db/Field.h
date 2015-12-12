@@ -74,4 +74,69 @@ protected:
     string value_;
 };
 
+// class FloatField: public Field
+// {
+// public:
+//     FloatField(int index, string name, bool is_primary_key=false);
+//     FloatField(const FloatField& obj);
+//     const FloatField & operator=(const float & value);
+//     operator float() const;
+//     void Set(void * data_ptr);
+//     void Copy(void * obj_ptr);
+
+// protected:
+//     float value_;
+// };
+
+// binss:
+// don't support float because connector c++ api don't support getFloat
+// so use double instead
+class DoubleField: public Field
+{
+public:
+    DoubleField(int index, string name, bool is_primary_key=false);
+    DoubleField(const DoubleField& obj);
+    const DoubleField & operator=(const long double & value);
+    operator long double() const;
+    void Set(void * data_ptr);
+    void Copy(void * obj_ptr);
+
+protected:
+    long double value_;
+};
+
+class BooleanField: public Field
+{
+public:
+    BooleanField(int index, string name, bool is_primary_key=false);
+    BooleanField(const BooleanField& obj);
+    const BooleanField & operator=(const bool & value);
+    operator bool() const;
+    void Set(void * data_ptr);
+    void Copy(void * obj_ptr);
+
+protected:
+    bool value_;
+};
+
+class DateField: public StringField
+{
+public:
+    DateField(int index, string name, bool is_primary_key=false);
+    DateField(const DateField& obj);
+    // 赋值运算符重载无法继承，需要重新定义
+    // const DateField & operator=(const DateField & value);
+    const DateField & operator=(const string & value);
+    // operator const char *() const;
+    void Set(void * data_ptr);
+    void Copy(void * obj_ptr);
+
+public:
+    int year_;
+    int month_;
+    int day_;
+
+protected:
+    string value_;
+};
 #endif

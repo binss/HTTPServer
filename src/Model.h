@@ -10,10 +10,11 @@
 
 #include "db/ModelBase.h"
 
-DEFINE_MODEL(User, 3)(
+DEFINE_MODEL(User, 4)(
     FIELD(1, Id, AutoField, true)
     FIELD(2, Name, StringField, false)
-    FIELD(3, Price, IntField, false)
+    FIELD(3, Price, DoubleField, false)
+    FIELD(4, Vip, BooleanField, false)
 )
 
 #endif

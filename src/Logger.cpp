@@ -93,6 +93,24 @@ Logger& Logger::operator<<(long unsigned int content)
     return *this;
 }
 
+Logger& Logger::operator<<(double content)
+{
+    stream_<<content;
+    return *this;
+}
+
+Logger& Logger::operator<<(long double content)
+{
+    stream_<<content;
+    return *this;
+}
+
+Logger& Logger::operator<<(bool content)
+{
+    stream_<<content;
+    return *this;
+}
+
 Logger& Logger::operator<<(Logger& (*fun) (Logger&))
 {
     return (*fun)(*this);

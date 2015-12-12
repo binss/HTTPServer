@@ -36,5 +36,6 @@ $(BIN_TARGET):$(OBJS)
 
 .PHONY:clean
 clean:
-	rm -f $(BIN_TARGET) $(SRC_DIR)/*.o $(SRC_DIR)/${SUB_DIR}/*.o  $(SRC_DIR)/*.d $(SRC_DIR)/${SUB_DIR}/*.d
+	rm -f $(BIN_TARGET) $(SRC_DIR)/*.o $(SRC_DIR)/*.d
+	$(foreach sub_dir, ${SUB_DIRS}, rm -f $(SRC_DIR)/${sub_dir}/*.o $(SRC_DIR)/${sub_dir}/*.d)
 

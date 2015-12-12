@@ -38,6 +38,9 @@ public:
     Logger& operator<<(string content);
     Logger& operator<<(int content);
     Logger& operator<<(unsigned int content);
+    Logger& operator<<(double content);
+    Logger& operator<<(long double content);
+    Logger& operator<<(bool content);
     Logger& operator<<(unordered_map<string, string> &content);
     Logger& operator<<(Logger& (*fun) (Logger&));
 

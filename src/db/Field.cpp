@@ -5,6 +5,7 @@
 * Description:   No Description
 ***********************************************************/
 
+#include <regex>
 #include "Field.h"
 
 Logger FIELD_LOG("Field", DEBUG, true);
@@ -46,7 +47,7 @@ bool Field::IsModified()
 }
 
 
-
+// -----------------------IntField-----------------------
 IntField::IntField(int index, string name, bool is_primary_key, bool is_auto_increment):
                 Field(index, INT, name, is_primary_key, is_auto_increment)
 {
@@ -81,7 +82,7 @@ void IntField::Copy(void * obj_ptr)
 }
 
 
-
+// -----------------------AutoField-----------------------
 AutoField::AutoField(int index, string name, bool is_primary_key):
                 IntField(index, name, is_primary_key, true)
 {
@@ -97,7 +98,7 @@ const AutoField & AutoField::operator=(const int & value)
 }
 
 
-
+// -----------------------StringField-----------------------
 StringField::StringField(int index, string name, bool is_primary_key): Field(index, STRING, name, is_primary_key, false), value_("")
 {
 }
@@ -126,4 +127,127 @@ void StringField::Set(void * data_ptr)
 void StringField::Copy(void * obj_ptr)
 {
     value_ = *static_cast<StringField *>(obj_ptr);
+}
+
+
+
+// -----------------------DoubleField-----------------------
+DoubleField::DoubleField(int index, string name, bool is_primary_key):
+                Field(index, DOUBLE, name, is_primary_key, false)
+{
+    value_ = 0;
+}
+
+DoubleField::DoubleField(const DoubleField& obj): Field(obj)
+{
+    value_ = obj.value_;
+}
+
+const DoubleField & DoubleField::operator=(const long double & value)
+{
+    is_modified_ = true;
+    value_ = value;
+    return *this;
+}
+
+DoubleField::operator long double() const
+{
+    return value_;
+}
+
+void DoubleField::Set(void * data_ptr)
+{
+    value_ = *static_cast<long double *>(data_ptr);
+}
+
+void DoubleField::Copy(void * obj_ptr)
+{
+    value_ = *static_cast<DoubleField *>(obj_ptr);
+}
+
+
+
+// -----------------------BooleanField-----------------------
+BooleanField::BooleanField(int index, string name, bool is_primary_key):
+                Field(index, BOOLEAN, name, is_primary_key, false)
+{
+    value_ = 0;
+}
+
+BooleanField::BooleanField(const BooleanField& obj): Field(obj)
+{
+    value_ = obj.value_;
+}
+
+const BooleanField & BooleanField::operator=(const bool & value)
+{
+    is_modified_ = true;
+    value_ = value;
+    return *this;
+}
+
+BooleanField::operator bool() const
+{
+    return value_;
+}
+
+void BooleanField::Set(void * data_ptr)
+{
+    value_ = *static_cast<bool *>(data_ptr);
+}
+
+void BooleanField::Copy(void * obj_ptr)
+{
+    value_ = *static_cast<BooleanField *>(obj_ptr);
+}
+
+
+
+// -----------------------DateField-----------------------
+DateField::DateField(int index, string name, bool is_primary_key): StringField(index, name, is_primary_key)
+{
+    year_ = 0;
+    month_ = 0;
+    day_ = 0;
+}
+
+DateField::DateField(const DateField & obj): StringField(obj), value_(obj.value_)
+{
+    year_ = obj.year_;
+    month_ = obj.month_;
+    day_ = obj.day_;
+}
+
+const DateField & DateField::operator=(const string & value)
+{
+    is_modified_ = true;
+    value_ = value;
+    return *this;
+}
+
+void DateField::Set(void * data_ptr)
+{
+    value_ = string(*static_cast<const char **>(data_ptr));
+    // 2015-12-04
+    regex reg("(\\d+)-(\\d+)-(\\d+)");
+    smatch token;
+    if(regex_match(value_, token, reg))
+    {
+        year_ = stoi(token[1]);
+        month_ = stoi(token[2]);
+        day_ = stoi(token[3]);
+    }
+    else
+    {
+        FIELD_LOG<<ERROR<<"can't decode date["<<value_<<"]"<<endl;
+    }
+}
+
+void DateField::Copy(void * obj_ptr)
+{
+    DateField * ptr = static_cast<DateField *>(obj_ptr);
+    value_ = *ptr;
+    year_ = ptr->year_;
+    month_ = ptr->month_;
+    day_ = ptr->day_;
 }
