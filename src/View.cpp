@@ -17,23 +17,6 @@ void main_page(Request &request, Response &response)
         response.SetCookie("email", "i@binss.me", GetTime(60000));
         response.SetCode(200);
         response.SetFile("index.html");
-
-        UserModel user_model;
-        if(user_model.Init() == 0)
-        {
-            LOG<<DEBUG<<"init ok"<<endl;
-            vector<User> users = user_model.All();
-            for(unsigned int i=0; i<users.size(); i++)
-            {
-                LOG<<DEBUG<<users[i].Id<<" "<<users[i].Name<<" "<<users[i].Price<<" "<<users[i].Vip<<endl;
-            }
-            User & user = users[0];
-            user.Price = 4.33;
-            user.Vip = true;
-            user_model.Save(user);
-        }
-
-
     }
     else if(request.META.METHOD == "POST")
     {
@@ -58,6 +41,36 @@ void upload_page(Request &request, Response &response)
     else if(request.META.METHOD == "POST")
     {
         LOG<<DEBUG<<request.POST["name"]<<endl;
+        response.SetCode(200);
+        response.SetRawString("OK");
+    }
+}
+
+
+void user_page(Request &request, Response &response)
+{
+    if(request.META.METHOD == "GET")
+    {
+
+        UserModel user_model;
+        if(user_model.Init() == 0)
+        {
+            LOG<<DEBUG<<"init ok"<<endl;
+            vector<User> users = user_model.All();
+            for(unsigned int i=0; i<users.size(); i++)
+            {
+                LOG<<DEBUG<<users[i].Id<<" "<<users[i].Name<<" "<<users[i].Balance<<" "<<users[i].Vip<<" "<<users[i].Birthday<<" ";
+                LOG<<users[i].AppointmentTime<<" "<<users[i].RegistrationTime<<endl;
+            }
+            User & user = users[3];
+            user.Balance = 2.33;
+            user.Vip = true;
+            user.Birthday = DateField(2000,2,1);
+            user.AppointmentTime = TimeField(11,20,0);
+            user.RegistrationTime = DateTimeField(time(0));
+            user_model.Save(user);
+        }
+
         response.SetCode(200);
         response.SetRawString("OK");
     }

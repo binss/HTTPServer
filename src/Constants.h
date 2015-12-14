@@ -75,7 +75,7 @@ struct Meta
 
 typedef unordered_map<string, string> SSMap;
 
-#define DB_HOST "tcp://172.17.0.3:3306"
+#define DB_HOST "tcp://172.17.0.2:3306"
 #define DB_USER "binss"
 #define DB_PASSWORD "123456"
 #define DB_NAME "dudu"

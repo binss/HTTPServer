@@ -189,7 +189,8 @@ int Model<ModelObjectName>::Varify()
                 }
                 case STRING:
                 {
-                    match = (type == "TEXT" || type == "VARCHAR" || type == "CHAR"); break;
+                    match = (type == "TEXT" || type == "VARCHAR" || type == "CHAR" || type == "DATE" || type == "TIME" || type == "DATETIME");
+                    break;
                 }
                 case DOUBLE:
                 {
@@ -243,28 +244,35 @@ int Model<ModelObjectName>::Varify()
 template<typename ModelObjectName>
 int Model<ModelObjectName>::GetField(int index, ModelObjectName & object)
 {
-    switch(object.GetFieldByIndex(index)->GetType())
+    if(res_->isNull(index))
     {
-        case INT:
+        object.GetFieldByIndex(index)->SetNull();
+    }
+    else
+    {
+        switch(object.GetFieldByIndex(index)->GetType())
         {
-            object.SetFieldByIndex(index, res_->getInt(index)); break;
-        }
-        case STRING:
-        {
-            object.SetFieldByIndex(index, res_->getString(index)); break;
-        }
-        case DOUBLE:
-        {
-            object.SetFieldByIndex(index, res_->getDouble(index)); break;
-        }
-        case BOOLEAN:
-        {
-            object.SetFieldByIndex(index, res_->getBoolean(index)); break;
-        }
-        default:
-        {
-            logger_<<ERROR<<"unknown type! skip"<<endl;
-            break;
+            case INT:
+            {
+                object.SetFieldByIndex(index, res_->getInt(index)); break;
+            }
+            case STRING:
+            {
+                object.SetFieldByIndex(index, res_->getString(index)); break;
+            }
+            case DOUBLE:
+            {
+                object.SetFieldByIndex(index, res_->getDouble(index)); break;
+            }
+            case BOOLEAN:
+            {
+                object.SetFieldByIndex(index, res_->getBoolean(index)); break;
+            }
+            default:
+            {
+                logger_<<ERROR<<"unknown type! skip"<<endl;
+                break;
+            }
         }
     }
     return 0;
@@ -273,28 +281,39 @@ int Model<ModelObjectName>::GetField(int index, ModelObjectName & object)
 template<typename ModelObjectName>
 int Model<ModelObjectName>::SetField(int index, Field * field)
 {
-    switch(field->GetType())
+    if(field->GetIndex() == 0)
     {
-        case INT:
+        logger_<<WARNING<<"Field "<<field->GetName()<<"["<<field->GetType()<<"] was constucted by user so it hadn't meta info"<<endl;
+    }
+    if(field->IsNull())
+    {
+        pstmt_->setNull(index, sql::DataType::INTEGER);
+    }
+    else
+    {
+        switch(field->GetType())
         {
-            pstmt_->setInt(index, *dynamic_cast<IntField *>(field)); break;
-        }
-        case STRING:
-        {
-            pstmt_->setString(index, sql::SQLString(*dynamic_cast<StringField *>(field))); break;
-        }
-        case DOUBLE:
-        {
-            pstmt_->setDouble(index, *dynamic_cast<DoubleField *>(field)); break;
-        }
-        case BOOLEAN:
-        {
-            pstmt_->setBoolean(index, *dynamic_cast<BooleanField *>(field)); break;
-        }
-        default:
-        {
-            logger_<<ERROR<<"unknown type! skip"<<endl;
-            break;
+            case INT:
+            {
+                pstmt_->setInt(index, *dynamic_cast<IntField *>(field)); break;
+            }
+            case STRING:
+            {
+                pstmt_->setString(index, sql::SQLString(*dynamic_cast<StringField *>(field))); break;
+            }
+            case DOUBLE:
+            {
+                pstmt_->setDouble(index, *dynamic_cast<DoubleField *>(field)); break;
+            }
+            case BOOLEAN:
+            {
+                pstmt_->setBoolean(index, *dynamic_cast<BooleanField *>(field)); break;
+            }
+            default:
+            {
+                logger_<<ERROR<<"unknown type! skip"<<endl;
+                break;
+            }
         }
     }
     return 0;

@@ -18,15 +18,19 @@ class Field
 {
 public:
     Field(int index, FieldType type, string name, bool is_primary_key, bool is_auto_increment);
-    Field(const Field& obj);
     FieldType GetType();
     const string & GetName();
+    int GetIndex();
+
     bool IsPrimaryKey();
     bool IsAutoIncrement();
     bool IsModified();
+    bool IsNull();
+
+    void SetNull();
 
     virtual void Set(void * data_ptr) = 0;
-    virtual void Copy(void * obj_ptr) = 0;
+    virtual void Copy(void * obj_ptr);
 
 protected:
     int index_;
@@ -36,17 +40,17 @@ protected:
     bool is_primary_key_;
     bool is_auto_increment_;
     bool is_modified_;
+    bool is_null_;
 };
 
 class IntField: public Field
 {
 public:
     IntField(int index, string name, bool is_primary_key=false, bool is_auto_increment=false);
-    IntField(const IntField& obj);
     const IntField & operator=(const int & value);
     operator int() const;
-    void Set(void * data_ptr);
-    void Copy(void * obj_ptr);
+    virtual void Set(void * data_ptr);
+    virtual void Copy(void * obj_ptr);
 
 protected:
     int value_;
@@ -64,29 +68,14 @@ class StringField: public Field
 {
 public:
     StringField(int index, string name, bool is_primary_key=false);
-    StringField(const StringField & obj);
     const StringField & operator=(const string & value);
     operator const char *();
-    void Set(void * data_ptr);
-    void Copy(void * obj_ptr);
+    virtual void Set(void * data_ptr);
+    virtual void Copy(void * obj_ptr);
 
 protected:
     string value_;
 };
-
-// class FloatField: public Field
-// {
-// public:
-//     FloatField(int index, string name, bool is_primary_key=false);
-//     FloatField(const FloatField& obj);
-//     const FloatField & operator=(const float & value);
-//     operator float() const;
-//     void Set(void * data_ptr);
-//     void Copy(void * obj_ptr);
-
-// protected:
-//     float value_;
-// };
 
 // binss:
 // don't support float because connector c++ api don't support getFloat
@@ -95,11 +84,10 @@ class DoubleField: public Field
 {
 public:
     DoubleField(int index, string name, bool is_primary_key=false);
-    DoubleField(const DoubleField& obj);
     const DoubleField & operator=(const long double & value);
     operator long double() const;
-    void Set(void * data_ptr);
-    void Copy(void * obj_ptr);
+    virtual void Set(void * data_ptr);
+    virtual void Copy(void * obj_ptr);
 
 protected:
     long double value_;
@@ -109,11 +97,10 @@ class BooleanField: public Field
 {
 public:
     BooleanField(int index, string name, bool is_primary_key=false);
-    BooleanField(const BooleanField& obj);
     const BooleanField & operator=(const bool & value);
     operator bool() const;
-    void Set(void * data_ptr);
-    void Copy(void * obj_ptr);
+    virtual void Set(void * data_ptr);
+    virtual void Copy(void * obj_ptr);
 
 protected:
     bool value_;
@@ -123,20 +110,67 @@ class DateField: public StringField
 {
 public:
     DateField(int index, string name, bool is_primary_key=false);
-    DateField(const DateField& obj);
-    // 赋值运算符重载无法继承，需要重新定义
-    // const DateField & operator=(const DateField & value);
-    const DateField & operator=(const string & value);
-    // operator const char *() const;
-    void Set(void * data_ptr);
-    void Copy(void * obj_ptr);
+    DateField(int year, int month, int day);
+    DateField(time_t time);
 
-public:
+    const DateField & operator=(const DateField & value);
+    virtual void Set(void * data_ptr);
+    virtual void Copy(void * obj_ptr);
+
+    int Year();
+    int Month();
+    int Day();
+
+protected:
     int year_;
     int month_;
     int day_;
+};
+
+
+class TimeField: public StringField
+{
+public:
+    TimeField(int index, string name, bool is_primary_key=false);
+    TimeField(int hour, int minute, int second);
+    TimeField(time_t time);
+
+    const TimeField & operator=(const TimeField & value);
+    virtual void Set(void * data_ptr);
+    void Copy(void * obj_ptr);
+
+    int Hour();
+    int Minute();
+    int Second();
 
 protected:
-    string value_;
+    int hour_;
+    int minute_;
+    int second_;
 };
+
+// don't use multiple inheritance from DateField and TimeField because it is a diamond inheritance
+// I have tried using virtual inheritance, it seem to work fine. However, when using base class pointer(field *) to call the copy function,
+// It called the DateField version and cored dump, maybe there are some problems about virtual inheritance with virtual function?
+class DateTimeField: public StringField
+{
+public:
+    DateTimeField(int index, string name, bool is_primary_key=false);
+    DateTimeField(int year, int month, int day, int hour, int minute, int second);
+    DateTimeField(time_t time);
+
+    const DateTimeField & operator=(const DateTimeField & value);
+    virtual void Set(void * data_ptr);
+    virtual void Copy(void * obj_ptr);
+
+protected:
+    int year_;
+    int month_;
+    int day_;
+    int hour_;
+    int minute_;
+    int second_;
+};
+
+
 #endif
