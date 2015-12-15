@@ -56,19 +56,22 @@ void user_page(Request &request, Response &response)
         if(user_model.Init() == 0)
         {
             LOG<<DEBUG<<"init ok"<<endl;
-            vector<User> users = user_model.All();
+            // vector<User> users = user_model.All();
+            vector<User> users = user_model.Filter({{"Vip", "=true"}, {"Id", ">100"}});
+
             for(unsigned int i=0; i<users.size(); i++)
             {
                 LOG<<DEBUG<<users[i].Id<<" "<<users[i].Name<<" "<<users[i].Balance<<" "<<users[i].Vip<<" "<<users[i].Birthday<<" ";
                 LOG<<users[i].AppointmentTime<<" "<<users[i].RegistrationTime<<endl;
             }
-            User & user = users[3];
+            User & user = users[0];
             user.Balance = 2.33;
             user.Vip = true;
             user.Birthday = DateField(2000,2,1);
             user.AppointmentTime = TimeField(11,20,0);
             user.RegistrationTime = DateTimeField(time(0));
             user_model.Save(user);
+
         }
 
         response.SetCode(200);

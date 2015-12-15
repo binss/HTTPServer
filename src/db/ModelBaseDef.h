@@ -320,10 +320,10 @@ int Model<ModelObjectName>::SetField(int index, Field * field)
 }
 
 template<typename ModelObjectName>
-vector<ModelObjectName> Model<ModelObjectName>::All()
+vector<ModelObjectName> Model<ModelObjectName>::Query(string filter_stat)
 {
     vector<ModelObjectName> objects;
-    string cmd = "SELECT * FROM " + name_;
+    string cmd = "SELECT * FROM " + name_ + filter_stat;
     try
     {
         stmt_ = con_->createStatement();
@@ -346,6 +346,51 @@ vector<ModelObjectName> Model<ModelObjectName>::All()
     }
     return objects;
 }
+
+template<typename ModelObjectName>
+vector<ModelObjectName> Model<ModelObjectName>::All()
+{
+    return Query("");
+}
+
+
+template<typename ModelObjectName>
+vector<ModelObjectName> Model<ModelObjectName>::Filter(FilterMap filters)
+{
+    ModelObjectName object;
+    string cmd = "SELECT * FROM " + name_;
+    string where_stmt = "";
+    for(FilterMap::iterator iter = filters.begin(); iter != filters.end(); ++iter)
+    {
+        bool hit = false;
+        cout<<iter->first<<" "<<iter->second<<endl;
+        for(int i=1; i<=field_num_; i++)
+        {
+            Field * field = object.GetFieldByIndex(i);
+            const string & field_name = field->GetName();
+            if(iter->first == field_name)
+            {
+                hit = true;
+                if(where_stmt != "")
+                {
+                    where_stmt += " and ";
+                }
+                where_stmt += iter->first + iter->second;
+            }
+        }
+        if(!hit)
+        {
+            logger_<<ERROR<<"Can't find field["<<iter->first<<"]. Ignore."<<endl;
+        }
+    }
+    if(where_stmt != "")
+    {
+        where_stmt = " WHERE " + where_stmt;
+    }
+    cout<<where_stmt<<endl;
+    return Query(where_stmt);
+}
+
 
 
 

@@ -49,7 +49,10 @@ public:
     ~Model();
     int Init();
     int Varify();
+
     vector<ModelObjectName> All();
+    vector<ModelObjectName> Filter(FilterMap filters);
+
     int Insert(ModelObjectName & object);
     int Update(ModelObjectName & object);
     int Delete(ModelObjectName & object);
@@ -60,6 +63,7 @@ public:
 private:
     int SetField(int index, Field * field);
     int GetField(int index, ModelObjectName & object);
+    vector<ModelObjectName> Query(string filter_stat);
 
 private:
     sql::Driver *driver_;
