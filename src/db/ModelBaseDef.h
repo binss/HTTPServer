@@ -320,10 +320,19 @@ int Model<ModelObjectName>::SetField(int index, Field * field)
 }
 
 template<typename ModelObjectName>
-vector<ModelObjectName> Model<ModelObjectName>::Query(string filter_stat)
+vector<ModelObjectName> Model<ModelObjectName>::Query(string filter_stat, string order_stat)
 {
+    string cmd = "SELECT * FROM " + name_;
+    if(filter_stat != "")
+    {
+        cmd += " WHERE " + filter_stat;
+    }
+    if(order_stat != "")
+    {
+        cmd += " ORDER BY " + order_stat;
+    }
+
     vector<ModelObjectName> objects;
-    string cmd = "SELECT * FROM " + name_ + filter_stat;
     try
     {
         stmt_ = con_->createStatement();
@@ -348,22 +357,24 @@ vector<ModelObjectName> Model<ModelObjectName>::Query(string filter_stat)
 }
 
 template<typename ModelObjectName>
-vector<ModelObjectName> Model<ModelObjectName>::All()
+vector<ModelObjectName> Model<ModelObjectName>::All(OrderMap orders)
 {
-    return Query("");
+    return Query("", BuildOrderStat(orders));
 }
 
-
 template<typename ModelObjectName>
-vector<ModelObjectName> Model<ModelObjectName>::Filter(FilterMap filters)
+string Model<ModelObjectName>::BuildOrderStat(OrderMap orders)
 {
+    string order_stmt = "";
     ModelObjectName object;
-    string cmd = "SELECT * FROM " + name_;
-    string where_stmt = "";
-    for(FilterMap::iterator iter = filters.begin(); iter != filters.end(); ++iter)
+    for(OrderMap::iterator iter = orders.begin(); iter != orders.end(); ++iter)
     {
+        if(iter->second != "+" && iter->second != "-")
+        {
+            logger_<<ERROR<<"Can't Recognize ["<<iter->second<<"]. Ignore. Please use \"+\" or \"-\"."<<endl;
+            continue;
+        }
         bool hit = false;
-        cout<<iter->first<<" "<<iter->second<<endl;
         for(int i=1; i<=field_num_; i++)
         {
             Field * field = object.GetFieldByIndex(i);
@@ -371,11 +382,18 @@ vector<ModelObjectName> Model<ModelObjectName>::Filter(FilterMap filters)
             if(iter->first == field_name)
             {
                 hit = true;
-                if(where_stmt != "")
+                if(order_stmt != "")
                 {
-                    where_stmt += " and ";
+                    order_stmt += ", ";
                 }
-                where_stmt += iter->first + iter->second;
+                if(iter->second == "+")
+                {
+                    order_stmt += iter->first + " ASC";
+                }
+                else
+                {
+                    order_stmt += iter->first + " DESC";
+                }
             }
         }
         if(!hit)
@@ -383,12 +401,39 @@ vector<ModelObjectName> Model<ModelObjectName>::Filter(FilterMap filters)
             logger_<<ERROR<<"Can't find field["<<iter->first<<"]. Ignore."<<endl;
         }
     }
-    if(where_stmt != "")
+    return order_stmt;
+}
+
+
+template<typename ModelObjectName>
+vector<ModelObjectName> Model<ModelObjectName>::Filter(FilterMap filters, OrderMap orders)
+{
+    ModelObjectName object;
+    string filter_stat = "";
+    for(FilterMap::iterator iter = filters.begin(); iter != filters.end(); ++iter)
     {
-        where_stmt = " WHERE " + where_stmt;
+        bool hit = false;
+        for(int i=1; i<=field_num_; i++)
+        {
+            Field * field = object.GetFieldByIndex(i);
+            const string & field_name = field->GetName();
+            if(iter->first == field_name)
+            {
+                hit = true;
+                if(filter_stat != "")
+                {
+                    filter_stat += " and ";
+                }
+                filter_stat += iter->first + iter->second;
+            }
+        }
+        if(!hit)
+        {
+            logger_<<ERROR<<"Can't find field["<<iter->first<<"]. Ignore."<<endl;
+        }
     }
-    cout<<where_stmt<<endl;
-    return Query(where_stmt);
+
+    return Query(filter_stat, BuildOrderStat(orders));
 }
 
 

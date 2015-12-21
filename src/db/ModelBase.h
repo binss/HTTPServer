@@ -50,8 +50,8 @@ public:
     int Init();
     int Varify();
 
-    vector<ModelObjectName> All();
-    vector<ModelObjectName> Filter(FilterMap filters);
+    vector<ModelObjectName> All(OrderMap orders={{}});
+    vector<ModelObjectName> Filter(FilterMap filters, OrderMap orders={{}});
 
     int Insert(ModelObjectName & object);
     int Update(ModelObjectName & object);
@@ -63,7 +63,8 @@ public:
 private:
     int SetField(int index, Field * field);
     int GetField(int index, ModelObjectName & object);
-    vector<ModelObjectName> Query(string filter_stat);
+    vector<ModelObjectName> Query(string filter_stat, string order_stat);
+    string BuildOrderStat(OrderMap orders);
 
 private:
     sql::Driver *driver_;

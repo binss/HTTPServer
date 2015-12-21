@@ -56,8 +56,8 @@ void user_page(Request &request, Response &response)
         if(user_model.Init() == 0)
         {
             LOG<<DEBUG<<"init ok"<<endl;
-            // vector<User> users = user_model.All();
-            vector<User> users = user_model.Filter({{"Vip", "=true"}, {"Id", ">100"}});
+            // vector<User> users = user_model.All({{"Id", "-"}});
+            vector<User> users = user_model.Filter({{"Vip", "=true"}, {"Id", "<100"}}, {{"Id", "+"}});
 
             for(unsigned int i=0; i<users.size(); i++)
             {
